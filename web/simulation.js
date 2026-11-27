@@ -1,4 +1,4 @@
-import { bounds, clamp, cover, eyeHeight, perimeter, roundSeconds, shutter, shutterMaxHP, teams, winScore } from '../web/yard.js';
+import { bounds, clamp, cover, eyeHeight, perimeter, roundSeconds, shutter, shutterMaxHP, teams, winScore } from './yard.js';
 
 const emptyInput = () => ({ lateral: 0, forward: 0, fire: false });
 const distance = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);

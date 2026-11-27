@@ -1,7 +1,10 @@
 import { makeAudio } from './audio.js';
 import { createScene } from './scene.js';
-import { roundSeconds, teams } from './yard.js';
+import { openPracticeLink } from './practice-link.js';
+import { YardMatch } from './simulation.js';
+import { roundSeconds, shutter, teams } from './yard.js';
 
+const practice = location.pathname === '/practice';
 const element = id => document.getElementById(id);
 const arena = element('arena');
 const ready = element('ready');
@@ -20,6 +23,7 @@ const aimModeLabel = {
   insecure: '手机已连 · 体感需 HTTPS',
 };
 let scene, socket, state, slot, retry, toastTimer;
+let practiceMatch, practiceLink;
 let connectionError = false;
 let phone = false;
 let phoneMode, pairingProtocol;
@@ -30,14 +34,104 @@ let lastPhase;
 const savedShake = sessionStorage.getItem('nightshift-shake');
 let shakeEnabled = savedShake ? savedShake === 'on' : !matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-try { scene = createScene(arena); }
+try { scene = createScene(arena, { directAim: practice }); }
 catch {
   stage.textContent = '游戏画面无法启动';
   note.textContent = '请用支持 WebGL 2 的桌面浏览器打开房间。';
 }
 
 function send(message) {
+  if (practiceMatch) {
+    if (message.type === 'input') practiceMatch.control(0, message);
+    if (message.type === 'pairing') practiceLink?.requestInvite();
+    return;
+  }
   if (socket?.readyState === WebSocket.OPEN && socket.bufferedAmount < 8000) socket.send(JSON.stringify(message));
+}
+
+function showInvite(data) {
+  element('room-url').value = practice ? data.pairURL : data.lan;
+  element('qr').src = data.qr;
+  element('pair-url').href = data.pairURL;
+  pairingProtocol = new URL(data.pairURL).protocol;
+  updatePairingStatus();
+}
+
+function startPractice() {
+  document.title = '夜班货场 · 直连靶场';
+  document.body.classList.add('practice');
+  lobby.setAttribute('aria-label', '直连靶场');
+  document.querySelector('.scoreboard').hidden = true;
+  document.querySelector('.seats').hidden = true;
+  document.querySelector('.keyboard').textContent = '也可以用 WASD 和鼠标试打。';
+  document.querySelector('label[for="room-url"]').textContent = '手机手柄链接';
+  element('room-url').setAttribute('aria-label', '手机手柄链接');
+  element('game-mode').textContent = '局域网 · 直连靶场';
+  element('switch-mode').href = '/';
+  element('switch-mode').textContent = '返回对战';
+  element('switch-mode').hidden = new URLSearchParams(location.search).get('preview') === '1';
+  stage.textContent = '直连靶场';
+  note.textContent = '手机与电脑连同一个 Wi-Fi，扫码后用铁板练习转向和开火。';
+  ready.textContent = '进入靶场';
+  ready.disabled = false;
+  element('crosshair').hidden = false;
+
+  slot = 0;
+  practiceMatch = new YardMatch();
+  Object.assign(practiceMatch.join(slot), { x: shutter.x, z: 2.35 });
+  practiceLink = openPracticeLink({
+    onInvite(data) {
+      showInvite(data);
+      element('pair').disabled = false;
+      if (!phone) pairing.hidden = false;
+    },
+    onChannel(channel) {
+      phone = true;
+      clearInputs();
+      practiceMatch.release(slot);
+      if (document.pointerLockElement) document.exitPointerLock();
+      lobby.hidden = true;
+      pairing.hidden = true;
+      element('game-mode').textContent = '直连靶场 · 手机已连接';
+      showToast('手机已直连');
+      updatePairingStatus();
+      channel.addEventListener('message', packet => {
+        let data;
+        try { data = JSON.parse(packet.data); } catch { return; }
+        if (data?.type === 'input') practiceMatch.control(slot, data);
+        if (data?.type === 'aim-mode' && Object.hasOwn(aimModeLabel, data.mode)) {
+          phoneMode = data.mode;
+          updatePairingStatus();
+        }
+      });
+    },
+    onLost(reason) {
+      phone = false;
+      phoneMode = undefined;
+      practiceMatch.release(slot);
+      element('game-mode').textContent = '局域网 · 直连靶场';
+      if (reason === 'replacing') return;
+      const message = reason === 'signaling' ? '配对服务已断开。重新载入本页后再扫码。'
+        : '直连断开。确认两台设备在同一 Wi-Fi 后重新扫码。';
+      if (!pairingProtocol) note.textContent = message;
+      else {
+        pairing.hidden = false;
+        element('pair-status').textContent = message;
+      }
+      showToast(message, 3500);
+    },
+  });
+
+  let previous = performance.now();
+  function drawPractice(now) {
+    practiceMatch.step(Math.max(0, Math.min(.05, (now - previous) / 1000)));
+    previous = now;
+    const snapshot = practiceMatch.snapshot();
+    scene.draw(snapshot, slot);
+    renderEffects(snapshot, snapshot.players[slot]);
+    requestAnimationFrame(drawPractice);
+  }
+  requestAnimationFrame(drawPractice);
 }
 
 function connect() {
@@ -54,13 +148,7 @@ function connect() {
       element('pair').disabled = false;
       if (!phone && (!state || state.phase === 'lobby')) pairing.hidden = false;
     }
-    if (data.type === 'welcome' || data.type === 'pairing') {
-      element('room-url').value = data.lan;
-      element('qr').src = data.qr;
-      element('pair-url').href = data.pairURL;
-      pairingProtocol = new URL(data.pairURL).protocol;
-      updatePairingStatus();
-    }
+    if (data.type === 'welcome' || data.type === 'pairing') showInvite(data);
     if (data.type === 'seats') {
       for (const [index, seat] of data.seats.entries()) {
         const id = index === 0 ? 'seat-a' : 'seat-b';
@@ -154,15 +242,21 @@ function display(data) {
   }
   if (ended && lastPhase !== 'ended' && document.pointerLockElement) document.exitPointerLock();
   lastPhase = data.phase;
+  renderEffects(data, player);
+  audio.music(playing && !data.paused);
+}
+
+function renderEffects(data, player) {
   for (const event of data.events) {
     scene.event(event);
     audio.event(event, slot, player);
     if (event.type === 'pickup' && event.player === slot) showToast('拿到电池，回己方货台');
     if (event.type === 'score') showToast(`${teams[event.player].name}得分`);
     if (event.type === 'shot' && event.target === slot) blink('flash', 'active', 80);
-    if (event.type === 'shot' && event.player === slot && event.target != null) blink('hit', null, 110);
+    if (event.type === 'shot' && event.player === slot && (event.target != null || (practice && event.impact === 'shutter'))) {
+      blink('hit', null, 110);
+    }
   }
-  audio.music(playing && !data.paused);
 }
 
 const effectTimers = new Map();
@@ -185,6 +279,7 @@ function clearInputs() {
 
 element('pair').disabled = true;
 element('pair').addEventListener('click', () => {
+  if (practice) audio.unlock();
   pairing.hidden = !pairing.hidden;
   if (!pairing.hidden) send({ type: 'pairing' });
 });
@@ -205,7 +300,11 @@ element('shake').addEventListener('click', () => {
   updateShake();
 });
 updateShake();
-ready.addEventListener('click', () => { audio.unlock(); send({ type: 'ready' }); });
+ready.addEventListener('click', () => {
+  audio.unlock();
+  if (practice) lobby.hidden = true;
+  else send({ type: 'ready' });
+});
 arena.addEventListener('pointerdown', () => {
   audio.unlock();
   if (phone) return;
@@ -241,4 +340,7 @@ function sendInput() {
 }
 
 setInterval(sendInput, 1000 / 50);
-if (scene) connect();
+if (scene) {
+  if (practice) startPractice();
+  else connect();
+}

@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "engines": { "node": ">=22" },
-  "scripts": { "start": "node game/server.js", "test": "node --test" },
+  "scripts": { "start": "node game/server.js", "preview:https": "node game/https-preview.js", "test": "node --test" },
   "dependencies": {
     "qrcode": "1.5.4",
     "three": "0.184.0",

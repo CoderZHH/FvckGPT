@@ -1,27 +1,41 @@
 # 夜班货场
 
-一款局域网里的第一人称对战游戏。电脑浏览器显示画面，手机扫码就能移动、转视角、开火。90 秒内把中央电池送回己方货台，先拿两分获胜。
+一款用手机操控的第一人称网页游戏。当前 MVP 是单人直连靶场。一台电脑显示游戏，一部 iPhone 扫码当手柄，可以移动、体感瞄准、快速转头和打碎铁板。
 
-## 开房
+## 试玩 MVP
 
-需要 Node.js 22 或更新版本。在项目目录运行：
+需要 Node.js 22 或更新版本。在项目目录运行 `npm ci`，再选一种方式启动。
 
-```sh
-npm ci
-npm start
+| 要试什么 | 启动命令 | 电脑打开 |
+| --- | --- | --- |
+| iPhone 体感与触屏 | `npm run preview:https`，需要安装 `cloudflared` | 终端打印的临时 HTTPS 地址 |
+| 局域网触屏 | `npm start` | `http://localhost:8787/practice` |
+
+1. 手机和电脑连同一个 Wi-Fi。电脑打开靶场，点「进入靶场」开启声音，手机用 Safari 打开大屏二维码。
+2. 左手用摇杆移动，右手横拖右区快速转头，按「开火」打铁板。电脑也可用 WASD 和鼠标练习，按 Esc 释放鼠标。
+3. 试体感时，在手机上点「开启体感」并授权。充电口朝自己，手机侧立，顶边对准大屏中央，再点「校准准星」。用手腕小幅转动精瞄，用右区横拖完成大幅转身。
+
+## 通信与交互基线
+
+后续玩法沿用这版体验。电脑网页负责画面和游戏反馈，手机网页扫码加入，摇杆负责移动，体感负责精瞄，右区横拖负责转身。
+
+```text
+配对    电脑网页 ↔ Node.js 配对服务 ↔ 手机网页
+游戏    手机手柄 ── 局域网 WebRTC DataChannel ──→ 电脑网页
+判定    电脑浏览器计算移动、碰撞和命中，再绘制游戏画面
 ```
 
-房主用电脑打开终端打印的「本机」地址。朋友在同一 Wi-Fi 下，用自己的电脑打开「局域网」地址。每个人扫各自屏幕上的二维码，电脑点击「准备开打」。一个房间支持两名玩家。等待时可以进场练习。
+- 配对时，二维码携带对应的配对码。Node.js 通过 `/practice-signal` 转送连接信息。连接建立后，手机的实时操作交给 WebRTC，电脑本地更新镜头和命中反馈。
+- 直连只尝试本地地址。手机和电脑要能在当前 Wi-Fi 或热点上互相访问。换网络后重新打开配对面板并扫码。
+- `npm run preview:https` 用免费的 Cloudflare Quick Tunnel 提供网页和配对入口。知道链接的人可以打开靶场，无需 GitHub 或 Cloudflare 账号。按 Ctrl+C 关闭进程，重启后使用新网址和新二维码。
 
-- 手机左边是移动摇杆，右边是开火。用体感时点「开启体感」，允许动作与方向，充电口朝自己、手机侧立、顶边指向大屏中央，再点「校准准星」。转动手机控制第一人称视角，拖动右区可快速转身。触屏模式支持按住「开火」并拖动视角。
-- 电脑也可用 WASD 和鼠标。点击场景锁定鼠标，用 Esc 释放。
-- 瞄准铁板开三次火，可以打通侧边通道。搬电池被击倒时，电池掉在现场，玩家三秒后复活。
-- 普通热点 HTTP 可以配对和用触屏。iPhone 网页体感需要 Safari 信任的 HTTPS。电脑端「连手机」面板会显示当前是否能用体感。`NIGHTSHIFT_IP` 可指定二维码里的局域网地址。
-- 电脑从 `localhost` 打开游戏时，切换 Wi-Fi 或手机热点后，二维码会自动跟随电脑的局域网 IP。换网络后用手机重新扫电脑上的码。
+## 双人对战原型
 
-## 用 HTTPS 开启 iPhone 体感
+用 `npm start` 启动，双方的电脑打开房主的局域网首页。每个玩家扫自己电脑上的码，两边点「准备开打」。90 秒内把中央电池送回己方货台，先拿两分获胜。瞄准铁板打三次可以打开侧路，玩家被击倒时会掉落电池，三秒后复活。这条路径目前用 Node.js 统一判定，通过 `/ws` 同步对局。
 
-手机手柄和游戏连接使用同一个 HTTPS 入口。入口需要有 Safari 信任的证书，并将 `/ws` 上的 WebSocket 请求交给这台游戏主机。GitHub 仓库用于存放源码，GitHub Pages 的静态托管无法运行项目里的房间服务。
+## 自己的 HTTPS 证书或反向代理
+
+手机手柄和游戏连接使用同一个 HTTPS 入口。反向代理需要转发 `/practice-signal` 的靶场配对请求。如果也提供对战房，需同时转发 `/ws`。GitHub Pages 的静态托管无法运行项目里的房间服务。
 
 如果需要在局域网里玩，让证书覆盖的域名在电脑和 iPhone 上都解析到游戏 Mac 的局域网地址。用自己的域名和证书替换下面的示例值，然后让电脑打开相同的网址，再扫描新二维码。
 
@@ -32,9 +46,16 @@ NIGHTSHIFT_ORIGIN=https://yard.example.com:8787 \
 npm start
 ```
 
-也可以让已有的 HTTPS 反向代理在前面处理证书。代理将网页和 `/ws` 转发给 `npm start` 启动的服务。用 `NIGHTSHIFT_ORIGIN` 指定浏览器访问的 HTTPS 网址，二维码会使用该网址。证书私钥保留在主机上。
+使用反向代理时，用 `NIGHTSHIFT_ORIGIN` 指定浏览器访问的 HTTPS 网址，二维码会使用该网址。用 `NIGHTSHIFT_IP` 可以指定直接走 HTTP 时二维码里的局域网 IP。
 
-在 GitHub Codespaces 里运行 `npm ci` 和 `npm start`，项目会用 GitHub 提供的 HTTPS 转发地址生成二维码。转发 `8787` 后，电脑先打开该地址，再用 iPhone Safari 扫码。选择私有端口时，两台设备需用 Codespace 所有者的 GitHub 账号访问。
+## 代码入口
+
+| 模块 | 文件 |
+| --- | --- |
+| 电脑画面、声音与反馈 | [`web/screen.js`](web/screen.js)、[`web/scene.js`](web/scene.js)、[`web/audio.js`](web/audio.js) |
+| 手机手柄与体感算法 | [`web/phone.js`](web/phone.js)、[`web/gyro.js`](web/gyro.js) |
+| 扫码配对与 WebRTC | [`game/practice-signals.js`](game/practice-signals.js)、[`web/practice-link.js`](web/practice-link.js) |
+| 游戏规则、HTTP 服务与 HTTPS 预览 | [`web/simulation.js`](web/simulation.js)、[`game/server.js`](game/server.js)、[`game/https-preview.js`](game/https-preview.js) |
 
 ## 场景与反馈
 

@@ -11,11 +11,11 @@
   <main id="arena" aria-label="夜班货场第一人称游戏"></main>
   <div class="hud">
     <header class="hud-head">
-      <div class="mark"><span class="mark-light"></span><div><strong>夜班货场</strong><small>局域网 · 1 对 1</small></div></div>
+      <div class="mark"><span class="mark-light"></span><div><strong>夜班货场</strong><small id="game-mode">局域网 · 1 对 1</small></div></div>
       <div class="scoreboard" aria-label="比分">
         <span id="score-a">0</span><time id="clock">01:30</time><span id="score-b">0</span>
       </div>
-      <div class="hud-actions"><button id="pair" type="button">连手机</button><button id="sound" type="button" aria-pressed="false">静音</button><button id="shake" type="button" aria-pressed="true">振屏</button></div>
+      <div class="hud-actions"><a id="switch-mode" href="/practice">直连靶场</a><button id="pair" type="button">连手机</button><button id="sound" type="button" aria-pressed="false">静音</button><button id="shake" type="button" aria-pressed="true">振屏</button></div>
     </header>
     <div id="crosshair" class="crosshair" hidden aria-hidden="true"></div>
     <div id="hit" class="hit" hidden aria-hidden="true">×</div>

@@ -53,9 +53,9 @@ export class SideGripAim {
     this.pitch += delta.pitch;
   }
 
-  consume() {
-    const yaw = this.yaw * .75;
-    const pitch = this.pitch * .75;
+  consume(fraction = .75) {
+    const yaw = this.yaw * fraction;
+    const pitch = this.pitch * fraction;
     this.yaw -= yaw;
     this.pitch -= pitch;
     return { yaw, pitch };

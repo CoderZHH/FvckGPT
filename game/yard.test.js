@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
+import { once } from 'node:events';
 import { setTimeout as delay } from 'node:timers/promises';
 import { test } from 'node:test';
 import { WebSocket } from 'ws';
 import { angularDelta, SideGripAim, topEdge } from '../web/gyro.js';
 import { shutter, teams } from '../web/yard.js';
 import { startYardServer } from './server.js';
-import { YardMatch } from './simulation.js';
+import { YardMatch } from '../web/simulation.js';
 
 const idle = { lateral: 0, forward: 0, yaw: 0, pitch: 0, fire: false };
 
@@ -208,4 +209,55 @@ test('an HTTPS reverse proxy can rewrite Host and still pair the screen and phon
     if (state.type === 'state' && state.players[screen.message.slot]?.yaw > .17) resolve(state.players[screen.message.slot]);
   }));
   assert.ok(aimed.pitch > .10);
+});
+
+test('practice signaling pairs one phone and forwards only its current offer and answer', { timeout: 4000 }, async t => {
+  const origin = 'https://yard.example';
+  const yard = await startYardServer({ host: '127.0.0.1', port: 0, practiceOnly: true });
+  t.after(() => yard.close());
+  yard.setOrigin(origin);
+  const endpoint = `ws://127.0.0.1:${yard.port}/practice-signal`;
+  const address = `http://127.0.0.1:${yard.port}`;
+  const landing = await fetch(address, { redirect: 'manual' });
+  assert.equal(landing.headers.get('location'), '/practice?preview=1');
+  const match = new WebSocket(`ws://127.0.0.1:${yard.port}/ws`, { origin });
+  await assert.rejects(once(match, 'open'));
+  assert.equal((await fetch(`${address}/practice`)).status, 200);
+  assert.equal((await fetch(`${address}/simulation.js`)).status, 200);
+
+  async function open() {
+    const socket = new WebSocket(endpoint, { origin });
+    await once(socket, 'open');
+    return socket;
+  }
+  const receive = async socket => JSON.parse((await once(socket, 'message'))[0]);
+  const send = (socket, message) => socket.send(JSON.stringify(message));
+  const host = await open();
+  const invite = receive(host);
+  send(host, { type: 'host' });
+  const url = new URL((await invite).pairURL);
+  assert.equal(url.origin, origin);
+  assert.equal(url.pathname, '/controller');
+  assert.equal(url.searchParams.get('practice'), '1');
+
+  const invalid = await open();
+  const rejected = once(invalid, 'close');
+  send(invalid, { type: 'phone', token: 'missing' });
+  assert.equal((await rejected)[0], 1008);
+
+  const phone = await open();
+  const peer = receive(host);
+  send(phone, { type: 'phone', token: url.hash.slice(1) });
+  const { exchange } = await peer;
+  const offer = { type: 'offer', exchange, sdp: 'offer' };
+  const receivedOffer = receive(phone);
+  send(host, { ...offer, exchange: exchange - 1 });
+  send(host, offer);
+  assert.deepEqual(await receivedOffer, offer);
+  const answer = { type: 'answer', exchange, sdp: 'answer' };
+  const receivedAnswer = receive(host);
+  send(phone, { type: 'input', ...idle, fire: true });
+  send(phone, answer);
+  assert.deepEqual(await receivedAnswer, answer);
+  assert.deepEqual(yard.match.players, [null, null]);
 });

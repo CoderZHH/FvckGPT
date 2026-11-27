@@ -234,7 +234,7 @@ function makeTool(camera) {
   return { tool, muzzle };
 }
 
-export function createScene(container) {
+export function createScene(container, { directAim = false } = {}) {
   const scene = new T.Scene();
   scene.background = new T.Color(0x17283d);
   scene.fog = new T.Fog(0x26374d, 17, 46);
@@ -350,9 +350,13 @@ export function createScene(container) {
       } else {
         camera.position.x += (local.x - camera.position.x) * blend;
         camera.position.z += (local.z - camera.position.z) * blend;
-        const yawGap = -local.yaw - camera.rotation.y;
-        camera.rotation.y += Math.atan2(Math.sin(yawGap), Math.cos(yawGap)) * blend;
-        camera.rotation.x += (local.pitch - camera.rotation.x) * blend;
+        if (directAim) {
+          camera.rotation.set(local.pitch, -local.yaw, 0);
+        } else {
+          const yawGap = -local.yaw - camera.rotation.y;
+          camera.rotation.y += Math.atan2(Math.sin(yawGap), Math.cos(yawGap)) * blend;
+          camera.rotation.x += (local.pitch - camera.rotation.x) * blend;
+        }
       }
     }
     tool.visible = local?.hp > 0;

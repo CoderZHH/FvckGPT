@@ -6,7 +6,8 @@ import { networkInterfaces } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import QRCode from 'qrcode';
 import { WebSocket, WebSocketServer } from 'ws';
-import { YardMatch } from './simulation.js';
+import { YardMatch } from '../web/simulation.js';
+import { acceptPracticeSignals } from './practice-signals.js';
 
 const web = fileURLToPath(new URL('../web/', import.meta.url));
 const three = fileURLToPath(new URL('../node_modules/three/build/', import.meta.url));
@@ -23,14 +24,18 @@ function networkAddress() {
   return addresses.find(ip => /^(en|eth|wlan)/.test(ip.name))?.address ?? addresses[0]?.address ?? '127.0.0.1';
 }
 
-function page(request, response) {
+function page(request, response, practiceOnly) {
   const path = new URL(request.url, 'http://nightshift.local').pathname;
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     response.writeHead(405).end();
     return;
   }
+  if (practiceOnly && path === '/') {
+    response.writeHead(302, { Location: '/practice?preview=1', 'Cache-Control': 'no-store' }).end();
+    return;
+  }
   let file;
-  if (path === '/') file = `${web}index.html`;
+  if (path === '/' || path === '/practice') file = `${web}index.html`;
   else if (path === '/controller') file = `${web}controller.html`;
   else if (path === '/assets/night-shift-sky.jpg') file = `${web}assets/night-shift-sky.jpg`;
   else if (/^\/vendor\/three\.(module|core)\.js$/.test(path)) file = `${three}${path.split('/').at(-1)}`;
@@ -51,21 +56,38 @@ function page(request, response) {
   });
 }
 
-export async function startYardServer({ port = defaultPort, host = '0.0.0.0', ip, tls, origin,
-  readNetworkAddress = networkAddress } = {}) {
-  const match = new YardMatch();
-  const seats = [null, null];
-  const scheme = tls ? 'https' : 'http';
+function parseOrigin(origin) {
   const externalURL = origin ? new URL(origin) : null;
   if (externalURL && !['https:', 'http:'].includes(externalURL.protocol)) {
     throw new Error('NIGHTSHIFT_ORIGIN must be an HTTP or HTTPS address.');
   }
-  const externalOrigin = externalURL?.origin;
-  const server = tls ? httpsServer(tls, page) : httpServer(page);
+  return externalURL?.origin;
+}
+
+export async function startYardServer({ port = defaultPort, host = '0.0.0.0', ip, tls, origin, practiceOnly = false,
+  readNetworkAddress = networkAddress } = {}) {
+  const match = new YardMatch();
+  const seats = [null, null];
+  const scheme = tls ? 'https' : 'http';
+  let externalOrigin = parseOrigin(origin);
+  const servePage = (request, response) => page(request, response, practiceOnly);
+  const server = tls ? httpsServer(tls, servePage) : httpServer(servePage);
   const ws = new WebSocketServer({ noServer: true, maxPayload: 2048, perMessageDeflate: false });
+  const practice = new WebSocketServer({ noServer: true, maxPayload: 16_384, perMessageDeflate: false });
   const send = (socket, data) => {
     if (socket?.readyState === WebSocket.OPEN && socket.bufferedAmount < 64_000) socket.send(data);
   };
+
+  function inviteOrigin(address) {
+    return `${scheme}://${address}:${server.address().port}`;
+  }
+
+  function screenOrigin(request) {
+    const inbound = new URL(`${scheme}://${request.headers.host ?? `localhost:${server.address().port}`}`);
+    return externalOrigin ?? (['localhost', '127.0.0.1', '[::1]'].includes(inbound.hostname) ? null : inbound.origin);
+  }
+
+  acceptPracticeSignals(practice, request => screenOrigin(request) ?? inviteOrigin(ip ?? readNetworkAddress()), token);
 
   function status() {
     const message = JSON.stringify({ type: 'seats', seats: seats.map(seat => ({ screen: Boolean(seat?.screen),
@@ -75,7 +97,7 @@ export async function startYardServer({ port = defaultPort, host = '0.0.0.0', ip
 
   async function publishPairing(seat, address) {
     const socket = seat.screen;
-    const lan = seat.inboundOrigin ?? `${scheme}://${address}:${server.address().port}`;
+    const lan = seat.inboundOrigin ?? inviteOrigin(address);
     if (seat.lan === lan) return;
     seat.lan = lan;
     const pairURL = `${lan}/controller#${seat.pair}`;
@@ -94,11 +116,12 @@ export async function startYardServer({ port = defaultPort, host = '0.0.0.0', ip
   server.on('upgrade', (request, socket, head) => {
     try {
       const client = request.headers.origin ? new URL(request.headers.origin) : null;
-      if (request.url !== '/ws' || (client && client.host !== request.headers.host && client.origin !== externalOrigin)) {
+      const endpoint = request.url === '/ws' && !practiceOnly ? ws : request.url === '/practice-signal' ? practice : null;
+      if (!endpoint || (client && client.host !== request.headers.host && client.origin !== externalOrigin)) {
         socket.destroy();
         return;
       }
-      ws.handleUpgrade(request, socket, head, client => ws.emit('connection', client, request));
+      endpoint.handleUpgrade(request, socket, head, client => endpoint.emit('connection', client, request));
     } catch {
       socket.destroy();
     }
@@ -128,8 +151,7 @@ export async function startYardServer({ port = defaultPort, host = '0.0.0.0', ip
       if (!role && data.type === 'screen') {
         let inboundOrigin;
         try {
-          const inbound = new URL(`${scheme}://${request.headers.host ?? `localhost:${server.address().port}`}`);
-          inboundOrigin = externalOrigin ?? (['localhost', '127.0.0.1', '[::1]'].includes(inbound.hostname) ? null : inbound.origin);
+          inboundOrigin = screenOrigin(request);
         } catch {
           socket.close(1008, 'host');
           return;
@@ -234,7 +256,7 @@ export async function startYardServer({ port = defaultPort, host = '0.0.0.0', ip
   }, 1000 / 60);
 
   const keepAlive = setInterval(() => {
-    for (const socket of ws.clients) {
+    for (const socket of [...ws.clients, ...practice.clients]) {
       if (!socket.alive) socket.terminate();
       else { socket.alive = false; socket.ping(); }
     }
@@ -247,11 +269,12 @@ export async function startYardServer({ port = defaultPort, host = '0.0.0.0', ip
     for (const seat of localScreens) void publishPairing(seat, address);
   }, 2000);
 
-  return { server, match, port: server.address().port, get ip() { return ip ?? readNetworkAddress(); }, scheme, close: () => {
+  return { server, match, port: server.address().port, get ip() { return ip ?? readNetworkAddress(); }, scheme,
+    setOrigin(value) { externalOrigin = parseOrigin(value); }, close: () => {
     clearInterval(gameTimer);
     clearInterval(keepAlive);
     clearInterval(pairingTimer);
-    for (const socket of ws.clients) socket.terminate();
+    for (const socket of [...ws.clients, ...practice.clients]) socket.terminate();
     return new Promise(resolve => server.close(resolve));
   } };
 }

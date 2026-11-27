@@ -1,7 +1,9 @@
 import { SideGripAim, topEdge } from './gyro.js';
-import { teams } from './yard.js';
+import { openPracticeLink } from './practice-link.js';
+import { clamp, teams } from './yard.js';
 
 const token = location.hash.slice(1);
+const practice = new URLSearchParams(location.search).get('practice') === '1';
 const element = id => document.getElementById(id);
 const connection = element('connection');
 const note = element('controller-note');
@@ -11,6 +13,7 @@ const look = element('look');
 const trigger = element('fire');
 const motionButton = element('motion');
 const touchButton = element('touch-mode');
+const retryButton = element('retry-pair');
 const aimHelp = element('aim-help');
 const aim = new SideGripAim();
 const canUseMotion = isSecureContext && typeof DeviceOrientationEvent !== 'undefined';
@@ -23,12 +26,22 @@ let mode = 'touch';
 let pose = null;
 let sensorTimeout;
 
+function isConnected() {
+  return socket?.readyState === (practice ? 'open' : WebSocket.OPEN);
+}
+
 function sendInput(includeAim = true) {
-  if (!paired || socket?.readyState !== WebSocket.OPEN || socket.bufferedAmount >= 4000) return;
-  const motion = includeAim && mode === 'motion' ? aim.consume() : { yaw: 0, pitch: 0 };
-  socket.send(JSON.stringify({ type: 'input', lateral, forward, fire,
-    yaw: includeAim ? yaw + motion.yaw : 0, pitch: includeAim ? pitch + motion.pitch : 0 }));
-  if (includeAim) yaw = pitch = 0;
+  if (!paired || !isConnected() || socket.bufferedAmount >= 4000) return;
+  if (includeAim && mode === 'motion') {
+    const angle = aim.consume(practice ? 1 : .75);
+    yaw += angle.yaw;
+    pitch += angle.pitch;
+  }
+  const turn = includeAim ? (practice ? clamp(yaw, -.7, .7) : yaw) : 0;
+  const tilt = includeAim ? (practice ? clamp(pitch, -.45, .45) : pitch) : 0;
+  socket.send(JSON.stringify({ type: 'input', lateral, forward, fire, yaw: turn, pitch: tilt }));
+  yaw -= turn;
+  pitch -= tilt;
 }
 
 function renderAim(help) {
@@ -60,27 +73,54 @@ function renderAim(help) {
 function setMode(next, help) {
   mode = next;
   renderAim(help);
-  if (paired && socket?.readyState === WebSocket.OPEN) {
+  if (paired && isConnected()) {
     const announced = !isSecureContext ? 'insecure' : (next === 'requesting' ? 'calibrating' : next);
     socket.send(JSON.stringify({ type: 'aim-mode', mode: announced }));
   }
 }
 
+function enterController(index) {
+  slot = index;
+  paired = true;
+  pads.hidden = false;
+  retryButton.hidden = true;
+  connection.textContent = practice ? '已直连电脑' : `${teams[slot].name} · 已连接`;
+  document.documentElement.style.setProperty('--orange', teams[slot].color);
+  note.textContent = practice ? '看电脑屏幕，试试打碎面前的铁板。' : '在电脑上准备开打。';
+  setMode(motionAllowed && mode !== 'touch' ? 'calibrating' : 'touch');
+}
+
+function leaveController() {
+  paired = false;
+  clearControls();
+  pads.hidden = true;
+  renderAim();
+}
+
 function connect() {
   connection.textContent = '正在连接电脑';
+  if (practice) {
+    note.textContent = '正在建立局域网直连。';
+    openPracticeLink({ token,
+      onChannel(channel) {
+        socket = channel;
+        enterController(0);
+      },
+      onLost(reason) {
+        leaveController();
+        connection.textContent = reason === 'replacing' ? '控制已交接' : '直连未完成';
+        note.textContent = reason === 'signaling' ? '请确认电脑上的靶场仍然打开，必要时重新扫码。'
+          : '请确认两台设备连同一个 Wi-Fi，再重新连接。';
+        retryButton.hidden = false;
+      },
+    });
+    return;
+  }
   socket = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
   socket.addEventListener('open', () => socket.send(JSON.stringify({ type: 'phone', token })));
   socket.addEventListener('message', packet => {
     const data = JSON.parse(packet.data);
-    if (data.type === 'welcome') {
-      slot = data.slot;
-      paired = true;
-      pads.hidden = false;
-      connection.textContent = `${teams[slot].name} · 已连接`;
-      document.documentElement.style.setProperty('--orange', teams[slot].color);
-      note.textContent = '在电脑上准备开打。';
-      setMode(motionAllowed && mode !== 'touch' ? 'calibrating' : 'touch');
-    }
+    if (data.type === 'welcome') enterController(data.slot);
     if (data.type === 'round') {
       note.textContent = data.phase === 'playing' ? (data.carry ? '拿到电池，回己方货台。'
         : `${data.score[slot]} 比 ${data.score[1 - slot]} · ${data.hp} 格生命`) : '在电脑上准备下一局。';
@@ -92,10 +132,7 @@ function connect() {
     }
   });
   socket.addEventListener('close', event => {
-    paired = false;
-    clearControls();
-    pads.hidden = true;
-    renderAim();
+    leaveController();
     if (event.code === 4001) {
       connection.textContent = '控制已交接';
       note.textContent = '另一部手机已接管。需要切回来时，重新扫描电脑上的二维码。';
@@ -109,6 +146,11 @@ function connect() {
     }
   });
 }
+
+retryButton.addEventListener('click', () => {
+  retryButton.hidden = true;
+  connect();
+});
 
 move.addEventListener('pointerdown', event => {
   if (moveTouch) return;
@@ -129,6 +171,7 @@ move.addEventListener('pointermove', event => {
   forward = -y / reach;
   move.style.setProperty('--thumb-x', `${lateral * moveTouch.radius * .61}px`);
   move.style.setProperty('--thumb-y', `${-forward * moveTouch.radius * .61}px`);
+  if (practice) sendInput();
 });
 
 function stopMove() {
@@ -146,15 +189,16 @@ look.addEventListener('pointerdown', event => {
     fire = true;
     trigger.classList.add('pressed');
     navigator.vibrate?.(22);
-    sendInput(false);
+    sendInput(practice);
   }
 });
 
 look.addEventListener('pointermove', event => {
   if (lookTouch?.id !== event.pointerId) return;
-  if (mode !== 'motion' || !lookTouch.shooting) {
-    yaw += (event.clientX - lookTouch.x) * .007;
+  if (practice || mode !== 'motion' || !lookTouch.shooting) {
+    yaw += (event.clientX - lookTouch.x) * (practice ? .016 : .007);
     if (mode !== 'motion') pitch -= (event.clientY - lookTouch.y) * .006;
+    if (practice) sendInput();
   }
   lookTouch.x = event.clientX;
   lookTouch.y = event.clientY;
@@ -240,7 +284,10 @@ window.addEventListener('deviceorientation', event => {
   const firstPose = !pose;
   pose = current;
   if (firstPose && mode === 'calibrating') renderAim();
-  if (mode === 'motion') aim.update(current);
+  if (mode === 'motion') {
+    aim.update(current);
+    if (practice) sendInput();
+  }
 });
 
 setInterval(sendInput, 1000 / 60);
