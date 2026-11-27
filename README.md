@@ -9,7 +9,7 @@
 | 要试什么 | 启动命令 | 电脑打开 |
 | --- | --- | --- |
 | iPhone 体感与触屏 | `npm run preview:https`，需要安装 `cloudflared` | 终端打印的临时 HTTPS 地址 |
-| 局域网触屏 | `npm start` | `http://localhost:8787/practice` |
+| 局域网触屏 | `npm start` | 终端打印的「直连靶场」地址，默认是 `http://localhost:8787/practice` |
 
 1. 手机和电脑连同一个 Wi-Fi。电脑打开靶场，点「进入靶场」开启声音，手机用 Safari 打开大屏二维码。
 2. 左手用摇杆移动，右手横拖右区快速转头，按「开火」打铁板。电脑也可用 WASD 和鼠标练习，按 Esc 释放鼠标。
@@ -48,7 +48,13 @@ npm start
 
 使用反向代理时，用 `NIGHTSHIFT_ORIGIN` 指定浏览器访问的 HTTPS 网址，二维码会使用该网址。用 `NIGHTSHIFT_IP` 可以指定直接走 HTTP 时二维码里的局域网 IP。
 
-## 代码入口
+## 项目目录与代码入口
+
+```text
+web/     运行在浏览器里。含电脑画面、手机手柄、直连和游戏规则
+game/    运行在 Node.js 中。含网页服务、扫码配对、HTTPS 启动和集成测试
+motion/  原生 Swift 体感算法参考。浏览器使用 web/gyro.js
+```
 
 | 模块 | 文件 |
 | --- | --- |

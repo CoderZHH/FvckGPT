@@ -289,5 +289,8 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   const tls = NIGHTSHIFT_TLS_CERT && NIGHTSHIFT_TLS_KEY ? { cert: readFileSync(NIGHTSHIFT_TLS_CERT),
     key: readFileSync(NIGHTSHIFT_TLS_KEY) } : undefined;
   const yard = await startYardServer({ port, host: NIGHTSHIFT_HOST, ip: NIGHTSHIFT_IP, origin, tls });
-  console.log(`夜班货场\n本机  ${yard.scheme}://localhost:${yard.port}\n${origin ? '扫码入口' : '局域网'}  ${origin ?? `${yard.scheme}://${yard.ip}:${yard.port}`}`);
+  const local = `${yard.scheme}://localhost:${yard.port}`;
+  const publicOrigin = parseOrigin(origin);
+  const room = publicOrigin ?? `${yard.scheme}://${yard.ip}:${yard.port}`;
+  console.log(`夜班货场\n直连靶场（电脑）  ${publicOrigin ?? local}/practice\n双人对战原型      ${room}/`);
 }
