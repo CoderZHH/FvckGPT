@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#171f28">
+  <title>夜班货场 · 手机手柄</title>
+  <link rel="stylesheet" href="/yard.css">
+</head>
+<body class="controller">
+  <header class="controller-head">
+    <div class="mark"><span class="mark-light"></span><div><strong>手机手柄</strong><small id="connection" role="status">正在连接电脑</small></div></div>
+    <div class="controller-actions">
+      <button id="touch-mode" type="button" hidden>触屏模式</button>
+      <button id="motion" type="button" hidden>开启体感</button>
+    </div>
+  </header>
+  <p id="aim-help" class="aim-help" role="status" hidden></p>
+  <main id="pads" class="pads" aria-label="游戏控制区" hidden>
+    <div id="move" class="pad move" aria-label="移动摇杆">
+      <div class="pad-name">移动</div>
+      <div class="stick-base"><span class="stick-thumb"></span></div>
+    </div>
+    <div id="look" class="pad look" aria-label="拖动转视角">
+      <div id="look-label" class="pad-name">拖动瞄准</div>
+      <button id="fire" type="button" aria-label="开火">开火</button>
+    </div>
+  </main>
+  <p id="controller-note" class="controller-note" role="status">保持手机和电脑连接同一 Wi-Fi。</p>
+  <script type="module" src="/phone.js"></script>
+</body>
+</html>

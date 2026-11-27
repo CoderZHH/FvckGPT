@@ -1,0 +1,108 @@
+:root {
+  color-scheme: dark;
+  --paper: #f4efdd;
+  --muted: #b1bcc3;
+  --ink: #111821;
+  --panel: #1c2632;
+  --line: #495160;
+  --orange: #ff9b4e;
+  --blue: #74d4ff;
+  --lime: #d3f873;
+  --mono: ui-monospace, 'SF Mono', Consolas, monospace;
+  font-family: 'PingFang SC', 'Microsoft YaHei', ui-sans-serif, system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--ink); color: var(--paper); }
+button, input { font: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: default; opacity: .55; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outline-offset: 3px; }
+
+.desktop { width: 100%; height: 100dvh; overflow: hidden; }
+#arena, .hud { position: fixed; inset: 0; }
+#arena { inset: -5px; background: #222c3a; transform: translate(var(--shake-x, 0px), var(--shake-y, 0px)); }
+#arena canvas { display: block; width: 100%; height: 100%; }
+.hud { pointer-events: none; }
+.hud button, .hud input { pointer-events: auto; }
+.hud-head { display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; padding: 28px 34px; }
+.mark { display: flex; align-items: center; justify-self: start; gap: 12px; line-height: 1.25; }
+.mark-light { display: block; width: 11px; height: 31px; background: var(--orange); transform: skew(-12deg); box-shadow: 3px 4px #090d12; }
+.mark strong { display: block; font-size: 19px; font-weight: 900; letter-spacing: .07em; }
+.mark small { display: block; margin-top: 4px; font-size: 13px; color: #d1d7d9; }
+.scoreboard { display: flex; align-items: center; background: #0c131dde; border: 1px solid #6f7682; box-shadow: 4px 4px #090d12; font: 800 22px var(--mono); }
+.scoreboard span { min-width: 48px; text-align: center; }
+.scoreboard span:first-child { color: var(--orange); }
+.scoreboard span:last-child { color: var(--blue); }
+.scoreboard time { padding: 9px 11px; border-inline: 1px solid var(--line); }
+.hud-actions { display: flex; gap: 8px; justify-self: end; }
+.hud-actions button, .panel-head button, .controller-head button { background: #131c27ed; border: 1px solid #657281; color: var(--paper); padding: 8px 12px; font-size: 14px; }
+.hud-actions button:hover, .panel-head button:hover, .controller-head button:hover { border-color: var(--lime); }
+.hud-actions button[aria-pressed='false']#shake { color: var(--muted); border-style: dashed; }
+
+.lobby { position: absolute; left: 6vw; top: 50%; transform: translateY(-42%); width: min(409px, 46vw); background: #141d28f2; border: 1px solid #687178; box-shadow: 8px 8px #090d14; }
+.lobby-inner { padding: clamp(20px, 2.4vw, 34px); border-left: 5px solid var(--orange); }
+.lobby h1 { font-size: clamp(37px, 4vw, 61px); line-height: 1.08; margin: 0 0 14px; font-weight: 950; letter-spacing: -.045em; }
+.lobby p { color: var(--muted); margin: 0; line-height: 1.6; }
+.seats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 9px; margin: 20px 0; }
+.seats div { padding: 11px 12px; border: 1px solid var(--line); background: #263141; }
+.seats b { display: block; color: var(--orange); }
+.seats div + div b { color: var(--blue); }
+.seats small { display: block; margin-top: 4px; color: #d0d8de; font-size: 13px; }
+.primary { background: var(--lime); color: #111815; width: 100%; border: 0; border-bottom: 4px solid #85a845; padding: 11px 16px; font-size: 17px; font-weight: 900; }
+.primary:not(:disabled):hover { background: #e1ff99; }
+.lobby .keyboard { margin-top: 13px; font-size: 13px; }
+
+.pairing { position: absolute; right: 34px; top: 81px; width: 250px; background: #1a2330; border: 1px solid #697480; box-shadow: 5px 5px #090d12; padding: 16px; pointer-events: auto; }
+.panel-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.panel-head h2 { margin: 0; font-size: 16px; }
+.panel-head button { padding: 3px 10px; font: 20px var(--mono); }
+.pairing img { display: block; margin: 0 auto; padding: 5px; background: #fff; }
+.pairing p { text-align: center; color: var(--blue); font-size: 14px; margin: 10px 0 18px; }
+.pairing label { display: block; font-size: 13px; color: var(--muted); }
+.pairing input { color: var(--paper); background: #111821; width: 100%; margin-top: 5px; border: 1px solid var(--line); padding: 7px; font: 12px var(--mono); }
+
+.hud-foot { position: absolute; bottom: 28px; left: 34px; right: 34px; display: flex; align-items: center; justify-content: space-between; }
+.hud-foot span, .toast { background: #0e1722e8; border: 1px solid #596477; padding: 9px 13px; box-shadow: 3px 3px #070b10; }
+.health { display: flex; gap: 6px; padding: 8px 0; }
+.health i { width: 28px; height: 12px; background: var(--lime); transform: skew(-14deg); border: 1px solid #121c0e; box-shadow: 3px 3px #101721; }
+.health i.lost { background: #44515a; }
+.crosshair { position: absolute; width: 20px; height: 20px; top: 50%; left: 50%; transform: translate(calc(-50% + var(--shake-x, 0px)), calc(-50% + var(--shake-y, 0px))); filter: drop-shadow(0 0 2px black); }
+.crosshair::before, .crosshair::after { content: ''; position: absolute; background: linear-gradient(90deg, #f4efdd 36%, transparent 36% 64%, #f4efdd 64%); width: 20px; height: 2px; top: 9px; }
+.crosshair::after { transform: rotate(90deg); }
+.hit { position: absolute; top: 50%; left: 50%; transform: translate(calc(-50% + var(--shake-x, 0px)), calc(-50% + var(--shake-y, 0px))); color: var(--lime); font: 32px var(--mono); text-shadow: 0 0 5px #172320; }
+.flash { position: absolute; inset: 0; box-shadow: inset 0 0 100px #ef6338; opacity: 0; transition: opacity .25s ease-out; }
+.flash.active { opacity: .8; transition: none; }
+.toast { position: absolute; left: 50%; top: 95px; transform: translateX(-50%); color: var(--lime); text-align: center; max-width: 85vw; }
+
+.controller { min-height: 100dvh; display: flex; flex-direction: column; padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+.controller-head { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin: 0 0 16px; }
+.controller-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.aim-help { color: var(--paper); font-size: 14px; line-height: 1.45; margin: 0 0 12px; }
+.controller[data-aim='motion'] #fire { width: min(160px, calc(100% - 20px)); height: min(118px, 56%); }
+.pads { display: grid; grid-template-columns: 1fr 1.24fr; gap: 9px; flex: 1; min-height: 220px; touch-action: none; user-select: none; }
+.pad { position: relative; overflow: hidden; min-width: 0; border: 1px solid #56616e; background: #222e3e; touch-action: none; }
+.pad-name { position: absolute; top: 10px; left: 10px; font-size: 14px; color: #ced9df; pointer-events: none; }
+.move { background: repeating-linear-gradient(135deg, #202b38 0 8px, #233040 8px 16px); }
+.stick-base { position: absolute; top: var(--stick-y, 57%); left: var(--stick-x, 50%); width: min(108px, 83%); aspect-ratio: 1; transform: translate(-50%, -50%); border: 2px solid #8ab4ce; border-radius: 50%; background: #132534bd; pointer-events: none; }
+.stick-thumb { position: absolute; inset: 27%; transform: translate(var(--thumb-x, 0px), var(--thumb-y, 0px)); background: var(--blue); border: 2px solid #28475b; border-radius: 50%; }
+.look { background: #2b3540; }
+#fire { position: absolute; bottom: 10px; right: 10px; width: min(122px, calc(100% - 20px)); height: min(101px, 45%); border: 2px solid #ecbc83; border-bottom: 5px solid #a85938; background: var(--orange); color: #191610; font-size: 20px; font-weight: 900; touch-action: none; }
+#fire.pressed { background: #ffe2af; border-bottom-width: 2px; }
+.controller-note { min-height: 1.2em; font-size: 14px; color: var(--muted); margin: 12px 0 0; }
+
+@media (max-width: 700px) {
+  .hud-head { padding: 14px; }
+  .lobby { left: 14px; width: min(355px, calc(100vw - 28px)); }
+  .scoreboard span { min-width: 28px; }
+  .scoreboard { font-size: 15px; }
+  .scoreboard time { padding: 8px 5px; }
+  .hud-actions { gap: 5px; }
+  .hud-actions button { padding: 6px; }
+  .mark { gap: 7px; }
+  .mark strong { font-size: 15px; }
+  .mark small { font-size: 12px; }
+  .pairing { right: 14px; top: 66px; }
+  .hud-foot { left: 14px; right: 14px; bottom: 14px; }
+}

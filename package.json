@@ -1,0 +1,13 @@
+{
+  "name": "night-shift-yard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": { "start": "node game/server.js", "test": "node --test" },
+  "dependencies": {
+    "qrcode": "1.5.4",
+    "three": "0.184.0",
+    "ws": "8.23.0"
+  }
+}

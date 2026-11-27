@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111821">
+  <title>夜班货场 · 局域网对战</title>
+  <link rel="stylesheet" href="/yard.css">
+</head>
+<body class="desktop">
+  <main id="arena" aria-label="夜班货场第一人称游戏"></main>
+  <div class="hud">
+    <header class="hud-head">
+      <div class="mark"><span class="mark-light"></span><div><strong>夜班货场</strong><small>局域网 · 1 对 1</small></div></div>
+      <div class="scoreboard" aria-label="比分">
+        <span id="score-a">0</span><time id="clock">01:30</time><span id="score-b">0</span>
+      </div>
+      <div class="hud-actions"><button id="pair" type="button">连手机</button><button id="sound" type="button" aria-pressed="false">静音</button><button id="shake" type="button" aria-pressed="true">振屏</button></div>
+    </header>
+    <div id="crosshair" class="crosshair" hidden aria-hidden="true"></div>
+    <div id="hit" class="hit" hidden aria-hidden="true">×</div>
+    <div id="flash" class="flash" aria-hidden="true"></div>
+    <div id="toast" class="toast" role="status" hidden></div>
+
+    <section id="lobby" class="lobby" aria-label="比赛房间">
+      <div class="lobby-inner">
+        <h1 id="stage-title">夜班货场</h1>
+        <p id="stage-note">抢到电池，送回己方货台。90 秒内先拿两分获胜。</p>
+        <div class="seats" aria-label="玩家连接状态">
+          <div id="seat-a"><b>橙队</b><small>等待加入</small></div>
+          <div id="seat-b"><b>蓝队</b><small>等待加入</small></div>
+        </div>
+        <button id="ready" class="primary" type="button" disabled>准备开打</button>
+        <p class="keyboard">手机扫码操控，也可用 WASD 和鼠标。点击场景可练习。</p>
+      </div>
+    </section>
+
+    <aside id="pairing" class="pairing" aria-label="手机配对" hidden>
+      <div class="panel-head"><h2>连接手机</h2><button id="close-pair" type="button" aria-label="关闭配对">×</button></div>
+      <a id="pair-url" target="_blank" rel="noopener noreferrer"><img id="qr" alt="手机配对二维码" width="170" height="170"></a>
+      <p id="pair-status">同一 Wi-Fi 下用相机扫码</p>
+      <label for="room-url">把房间地址发给朋友</label>
+      <input id="room-url" readonly aria-label="局域网房间地址">
+    </aside>
+
+    <footer class="hud-foot" id="hud-foot" hidden>
+      <div class="health" id="health" aria-label="三个生命格"><i></i><i></i><i></i></div>
+      <span id="objective">去中央拿电池</span>
+    </footer>
+  </div>
+  <script type="module" src="/screen.js"></script>
+</body>
+</html>
