@@ -171,3 +171,41 @@ test('two screens and their paired phone sockets join, play and update QR codes 
   assert.equal(refreshed.key, a.key);
   assert.notEqual(refreshed.qr, a.qr);
 });
+
+test('an HTTPS reverse proxy can rewrite Host and still pair the screen and phone', { timeout: 4000 }, async t => {
+  const origin = 'https://nightshift-8787.app.github.dev';
+  const yard = await startYardServer({ host: '127.0.0.1', port: 0, origin: `${origin}/` });
+  t.after(() => yard.close());
+  const endpoint = `ws://127.0.0.1:${yard.port}/ws`;
+
+  await assert.rejects(new Promise((resolve, reject) => {
+    const client = new WebSocket(endpoint, { origin: 'https://unrelated.example' });
+    client.once('open', resolve);
+    client.once('error', reject);
+  }));
+
+  function connect(handshake) {
+    return new Promise((resolve, reject) => {
+      const socket = new WebSocket(endpoint, { origin });
+      socket.once('open', () => socket.send(JSON.stringify(handshake)));
+      socket.once('error', reject);
+      socket.on('message', raw => {
+        const message = JSON.parse(raw);
+        if (message.type === 'welcome') resolve({ socket, message });
+      });
+    });
+  }
+
+  const screen = await connect({ type: 'screen' });
+  const pairURL = new URL(screen.message.pairURL);
+  assert.equal(pairURL.origin, origin);
+  assert.equal(pairURL.pathname, '/controller');
+  const phone = await connect({ type: 'phone', token: pairURL.hash.slice(1) });
+  assert.equal(phone.message.slot, screen.message.slot);
+  phone.socket.send(JSON.stringify({ type: 'input', ...idle, yaw: .18, pitch: .11 }));
+  const aimed = await new Promise(resolve => screen.socket.on('message', raw => {
+    const state = JSON.parse(raw);
+    if (state.type === 'state' && state.players[screen.message.slot]?.yaw > .17) resolve(state.players[screen.message.slot]);
+  }));
+  assert.ok(aimed.pitch > .10);
+});

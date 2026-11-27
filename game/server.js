@@ -56,6 +56,11 @@ export async function startYardServer({ port = defaultPort, host = '0.0.0.0', ip
   const match = new YardMatch();
   const seats = [null, null];
   const scheme = tls ? 'https' : 'http';
+  const externalURL = origin ? new URL(origin) : null;
+  if (externalURL && !['https:', 'http:'].includes(externalURL.protocol)) {
+    throw new Error('NIGHTSHIFT_ORIGIN must be an HTTP or HTTPS address.');
+  }
+  const externalOrigin = externalURL?.origin;
   const server = tls ? httpsServer(tls, page) : httpServer(page);
   const ws = new WebSocketServer({ noServer: true, maxPayload: 2048, perMessageDeflate: false });
   const send = (socket, data) => {
@@ -88,8 +93,8 @@ export async function startYardServer({ port = defaultPort, host = '0.0.0.0', ip
 
   server.on('upgrade', (request, socket, head) => {
     try {
-      const suppliedOrigin = request.headers.origin;
-      if (request.url !== '/ws' || (suppliedOrigin && new URL(suppliedOrigin).host !== request.headers.host)) {
+      const client = request.headers.origin ? new URL(request.headers.origin) : null;
+      if (request.url !== '/ws' || (client && client.host !== request.headers.host && client.origin !== externalOrigin)) {
         socket.destroy();
         return;
       }
@@ -124,7 +129,7 @@ export async function startYardServer({ port = defaultPort, host = '0.0.0.0', ip
         let inboundOrigin;
         try {
           const inbound = new URL(`${scheme}://${request.headers.host ?? `localhost:${server.address().port}`}`);
-          inboundOrigin = origin ?? (['localhost', '127.0.0.1', '[::1]'].includes(inbound.hostname) ? null : inbound.origin);
+          inboundOrigin = externalOrigin ?? (['localhost', '127.0.0.1', '[::1]'].includes(inbound.hostname) ? null : inbound.origin);
         } catch {
           socket.close(1008, 'host');
           return;
@@ -253,10 +258,13 @@ export async function startYardServer({ port = defaultPort, host = '0.0.0.0', ip
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   const { NIGHTSHIFT_PORT, NIGHTSHIFT_HOST, NIGHTSHIFT_IP, NIGHTSHIFT_TLS_CERT, NIGHTSHIFT_TLS_KEY,
-    NIGHTSHIFT_ORIGIN } = process.env;
+    NIGHTSHIFT_ORIGIN, CODESPACES, CODESPACE_NAME, GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN } = process.env;
+  const port = Number(NIGHTSHIFT_PORT ?? defaultPort);
+  const codespaceOrigin = CODESPACES === 'true' && CODESPACE_NAME && GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN
+    ? `https://${CODESPACE_NAME}-${port}.${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}` : undefined;
+  const origin = NIGHTSHIFT_ORIGIN ?? codespaceOrigin;
   const tls = NIGHTSHIFT_TLS_CERT && NIGHTSHIFT_TLS_KEY ? { cert: readFileSync(NIGHTSHIFT_TLS_CERT),
     key: readFileSync(NIGHTSHIFT_TLS_KEY) } : undefined;
-  const yard = await startYardServer({ port: Number(NIGHTSHIFT_PORT ?? defaultPort), host: NIGHTSHIFT_HOST,
-    ip: NIGHTSHIFT_IP, origin: NIGHTSHIFT_ORIGIN, tls });
-  console.log(`夜班货场\n本机  ${yard.scheme}://localhost:${yard.port}\n局域网  ${NIGHTSHIFT_ORIGIN ?? `${yard.scheme}://${yard.ip}:${yard.port}`}`);
+  const yard = await startYardServer({ port, host: NIGHTSHIFT_HOST, ip: NIGHTSHIFT_IP, origin, tls });
+  console.log(`夜班货场\n本机  ${yard.scheme}://localhost:${yard.port}\n${origin ? '扫码入口' : '局域网'}  ${origin ?? `${yard.scheme}://${yard.ip}:${yard.port}`}`);
 }

@@ -32,7 +32,9 @@ NIGHTSHIFT_ORIGIN=https://yard.example.com:8787 \
 npm start
 ```
 
-也可以让已有的 HTTPS 反向代理在前面处理证书。代理将网页和 `/ws` 转发给 `npm start` 启动的服务，并保留原始 `Host`。此时只需用 `NIGHTSHIFT_ORIGIN` 指定代理对玩家开放的 HTTPS 网址。证书私钥保留在主机上。
+也可以让已有的 HTTPS 反向代理在前面处理证书。代理将网页和 `/ws` 转发给 `npm start` 启动的服务。用 `NIGHTSHIFT_ORIGIN` 指定浏览器访问的 HTTPS 网址，二维码会使用该网址。证书私钥保留在主机上。
+
+在 GitHub Codespaces 里运行 `npm ci` 和 `npm start`，项目会用 GitHub 提供的 HTTPS 转发地址生成二维码。转发 `8787` 后，电脑先打开该地址，再用 iPhone Safari 扫码。选择私有端口时，两台设备需用 Codespace 所有者的 GitHub 账号访问。
 
 ## 场景与反馈
 
