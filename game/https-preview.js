@@ -35,7 +35,11 @@ function readLine(line) {
   if (origin && registered && !stopping && !startupReady) {
     startupReady = true;
     clearTimeout(startup);
-    console.log(`夜班货场 HTTPS 靶场\n${origin}/\n\n用电脑打开网址，再用 iPhone Safari 扫码。按 Ctrl+C 关闭入口。`);
+    console.log(`夜班货场 HTTPS 行动大厅\n${origin}/\n\n每人用电脑打开同一网址，用自己的手机扫码选择行动。按 Ctrl+C 关闭入口。`);
+    if (process.platform === 'darwin' && process.argv.includes('--open')) {
+      const browser = spawn('open', [origin], { stdio: 'ignore' });
+      browser.on('error', () => console.error('请从上方网址打开行动大厅。'));
+    }
   }
   if (/\b(ERR|WRN)\b/.test(line)) console.error(line);
 }

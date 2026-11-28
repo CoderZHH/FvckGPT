@@ -35,7 +35,7 @@ export class SideGripAim {
     return true;
   }
 
-  update(pose) {
+  update(pose, pitchDelta) {
     if (!pose || Math.abs(pose.pitch) > 1.27) {
       this.reset();
       return;
@@ -50,7 +50,7 @@ export class SideGripAim {
       return;
     }
     this.yaw += delta.yaw;
-    this.pitch += delta.pitch;
+    this.pitch += pitchDelta ?? delta.pitch;
   }
 
   consume(fraction = .75) {

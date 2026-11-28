@@ -1,5 +1,6 @@
 import QRCode from 'qrcode';
 import { WebSocket } from 'ws';
+import { battleRooms } from './battle-rooms.js';
 
 export function acceptPracticeSignals(server, inviteOrigin, makeToken) {
   const rooms = new Map();
@@ -10,9 +11,12 @@ export function acceptPracticeSignals(server, inviteOrigin, makeToken) {
     }
   }
 
+  const battle = battleRooms(send, makeToken);
+
   async function sendInvite(room, request) {
     try {
-      const pairURL = `${inviteOrigin(request)}/controller?practice=1#${room.token}`;
+      const transport = room.host.httpsPolling ? '&signal=poll' : '';
+      const pairURL = `${inviteOrigin(request)}/controller?practice=1${transport}#${room.token}`;
       if (room.pairURL === pairURL) return;
       room.pairURL = pairURL;
       const qr = await QRCode.toDataURL(pairURL, { margin: 2, width: 220 });
@@ -22,7 +26,7 @@ export function acceptPracticeSignals(server, inviteOrigin, makeToken) {
     }
   }
 
-  server.on('connection', (socket, request) => {
+  function accept(socket, request) {
     let room, role;
     let messages = 0;
     let countSince = Date.now();
@@ -43,6 +47,16 @@ export function acceptPracticeSignals(server, inviteOrigin, makeToken) {
       let message;
       try { message = JSON.parse(raw); } catch { return; }
       if (!message || typeof message !== 'object') return;
+
+      if (!role && message.type === 'room') {
+        role = 'room';
+        clearTimeout(deadline);
+        return;
+      }
+      if (role === 'room') {
+        battle.handle(socket, message);
+        return;
+      }
 
       if (!role && message.type === 'host') {
         role = 'host';
@@ -81,6 +95,7 @@ export function acceptPracticeSignals(server, inviteOrigin, makeToken) {
     });
 
     socket.on('close', () => {
+      if (role === 'room') battle.leave(socket);
       clearTimeout(deadline);
       if (!room || room[role] !== socket) return;
       if (role === 'host') {
@@ -90,5 +105,8 @@ export function acceptPracticeSignals(server, inviteOrigin, makeToken) {
         room.phone = null;
       }
     });
-  });
+  }
+
+  server.on('connection', accept);
+  return accept;
 }

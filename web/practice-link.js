@@ -1,9 +1,23 @@
+import { PracticePollingSignal } from './practice-poll.js';
+
 const channelName = 'nightshift-controls';
 const connectTimeout = 18_000;
 
 export function openPracticeLink({ token, onInvite, onChannel, onLost }) {
   const isHost = !token;
-  const socket = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/practice-signal`);
+  const params = new URLSearchParams(location.search);
+  const polling = isHost ? params.get('preview') === '1' : params.get('signal') === 'poll';
+  const hello = isHost ? { type: 'host' } : { type: 'phone', token };
+  const socket = polling ? new PracticePollingSignal(hello)
+    : new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/practice-signal`);
+  let closed = false;
+  function close() {
+    closed = true;
+    reset();
+    socket.close();
+    window.removeEventListener('pagehide', close);
+  }
+  window.addEventListener('pagehide', close, { once: true });
   let session;
   let timer;
   let failed = false;
@@ -20,7 +34,7 @@ export function openPracticeLink({ token, onInvite, onChannel, onLost }) {
   }
 
   function fail(reason) {
-    if (failed) return;
+    if (failed || closed) return;
     failed = true;
     reset();
     if (!isHost) socket.close();
@@ -35,7 +49,7 @@ export function openPracticeLink({ token, onInvite, onChannel, onLost }) {
       onChannel(channel);
     });
     channel.addEventListener('close', () => {
-      if (session === current) fail('disconnected');
+      if (session === current) fail(socket.readyState === WebSocket.CLOSED ? 'signaling' : 'disconnected');
     });
   }
 
@@ -73,7 +87,7 @@ export function openPracticeLink({ token, onInvite, onChannel, onLost }) {
   }
 
   socket.addEventListener('open', () => {
-    signal(isHost ? { type: 'host' } : { type: 'phone', token });
+    if (!polling) signal(hello);
     if (!isHost) timer = setTimeout(() => fail('unreachable'), connectTimeout);
   });
   socket.addEventListener('message', async event => {
@@ -109,6 +123,7 @@ export function openPracticeLink({ token, onInvite, onChannel, onLost }) {
   });
 
   return {
+    close,
     requestInvite() { signal({ type: 'invite' }); },
   };
 }

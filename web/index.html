@@ -3,9 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#111821">
-  <title>夜班货场 · 局域网对战</title>
+  <meta name="theme-color" content="#162520">
+  <title>夜班货场 · 行动大厅</title>
   <link rel="stylesheet" href="/yard.css">
+  <link rel="stylesheet" href="/rooms.css">
 </head>
 <body class="desktop">
   <main id="arena" aria-label="夜班货场第一人称游戏"></main>
@@ -15,17 +16,31 @@
       <div class="scoreboard" aria-label="比分">
         <span id="score-a">0</span><time id="clock">01:30</time><span id="score-b">0</span>
       </div>
-      <div class="hud-actions"><a id="switch-mode" href="/practice">直连靶场</a><button id="pair" type="button">连手机</button><button id="sound" type="button" aria-pressed="false">静音</button><button id="shake" type="button" aria-pressed="true">振屏</button></div>
+      <div class="hud-actions">
+        <a id="switch-mode" href="/practice">直连靶场</a><button id="sparring" type="button" hidden>开始对练</button>
+        <button id="pair" type="button">连手机</button><button id="armory" type="button" aria-expanded="false" aria-controls="armory-panel">装备</button><button id="controls" type="button" aria-expanded="false" aria-controls="control-panel">操作设置</button><button id="sound" type="button" aria-pressed="false">静音</button><button id="shake" type="button" aria-pressed="false">后坐反馈</button>
+      </div>
     </header>
     <div id="crosshair" class="crosshair" hidden aria-hidden="true"></div>
     <div id="hit" class="hit" hidden aria-hidden="true">×</div>
+    <div id="dash-wake" aria-hidden="true"></div>
     <div id="flash" class="flash" aria-hidden="true"></div>
+    <div id="damage-bearing" aria-hidden="true" hidden></div>
+    <div id="impact-word" class="impact-word" hidden aria-hidden="true"></div>
     <div id="toast" class="toast" role="status" hidden></div>
 
     <section id="lobby" class="lobby" aria-label="比赛房间">
+      <picture class="lobby-art"><img src="/assets/wasteland-key-art.jpg" alt=""></picture>
       <div class="lobby-inner">
         <h1 id="stage-title">夜班货场</h1>
         <p id="stage-note">抢到电池，送回己方货台。90 秒内先拿两分获胜。</p>
+        <div class="briefings" aria-label="可选行动">
+          <div><small>局域网联机 · 1v1 至 5v5</small><b>断电争夺</b><span>90 秒 · 击倒或夺芯得分</span></div>
+          <div><small>单人挑战</small><b>限时清场</b><span>60 秒 · 连击刷新纪录</span></div>
+        </div>
+        <section id="screen-room" class="room-panel" aria-label="房间玩家" hidden>
+          <div id="screen-roster" class="room-roster"></div>
+        </section>
         <div class="seats" aria-label="玩家连接状态">
           <div id="seat-a"><b>橙队</b><small>等待加入</small></div>
           <div id="seat-b"><b>蓝队</b><small>等待加入</small></div>
@@ -43,9 +58,27 @@
       <input id="room-url" readonly aria-label="局域网房间地址">
     </aside>
 
+    <aside id="control-panel" class="pairing controls-panel" aria-label="电脑操作设置" hidden>
+      <div class="panel-head"><h2>电脑操作设置</h2><button id="close-controls" type="button" aria-label="关闭操作设置">×</button></div>
+      <label for="mouse-sensitivity">鼠标灵敏度 <output id="mouse-sensitivity-value" for="mouse-sensitivity">1.00×</output></label>
+      <input id="mouse-sensitivity" type="range" min="0.35" max="2.5" step="0.05" value="1">
+      <label for="quality">画质</label>
+      <select id="quality"><option value="auto">自适应</option><option value="smooth">流畅优先</option><option value="detail">清晰优先</option></select>
+      <dl class="key-guide"><dt>移动</dt><dd>WASD</dd><dt>开火</dt><dd>鼠标左键</dd><dt>换弹</dt><dd>R</dd><dt>选装备</dt><dd>1 / 2 / 3</dd></dl>
+    </aside>
+
+    <aside id="armory-panel" class="pairing armory-panel" aria-label="选择装备" hidden>
+      <div class="panel-head"><h2>选择装备</h2><button id="close-armory" type="button" aria-label="关闭装备">×</button></div>
+      <div id="loadout-options" class="loadout-options"></div>
+    </aside>
+
     <footer class="hud-foot" id="hud-foot" hidden>
-      <div class="health" id="health" aria-label="三个生命格"><i></i><i></i><i></i></div>
+      <div class="health"><b id="health-points">100</b><meter id="health-meter" min="0" max="100" value="100" aria-label="生命值"></meter></div>
       <span id="objective">去中央拿电池</span>
+      <div class="weapon-readout" id="weapon-name">电弧卡宾</div>
+      <div class="ammo-readout" aria-label="弹药">
+        <b id="ammo">24</b><span id="reserve"></span><progress id="reload-progress" hidden aria-label="换弹进度" value="0" max="1"></progress>
+      </div>
     </footer>
   </div>
   <script type="module" src="/screen.js"></script>

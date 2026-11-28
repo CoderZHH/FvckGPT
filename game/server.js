@@ -7,7 +7,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import QRCode from 'qrcode';
 import { WebSocket, WebSocketServer } from 'ws';
 import { YardMatch } from '../web/simulation.js';
+import { combatFeedback } from '../web/combat-feedback.js';
 import { acceptPracticeSignals } from './practice-signals.js';
+import { createPracticeMailbox } from './practice-mailbox.js';
 
 const web = fileURLToPath(new URL('../web/', import.meta.url));
 const three = fileURLToPath(new URL('../node_modules/three/build/', import.meta.url));
@@ -35,10 +37,11 @@ function page(request, response, practiceOnly) {
     return;
   }
   let file;
-  if (path === '/' || path === '/practice') file = `${web}index.html`;
+  if (path === '/' || path === '/practice' || path === '/duel') file = `${web}index.html`;
   else if (path === '/controller') file = `${web}controller.html`;
-  else if (path === '/assets/night-shift-sky.jpg') file = `${web}assets/night-shift-sky.jpg`;
-  else if (/^\/vendor\/three\.(module|core)\.js$/.test(path)) file = `${three}${path.split('/').at(-1)}`;
+  else if (/^\/assets\/(night-shift-sky|wasteland-horizon|wasteland-key-art)\.jpg$/.test(path)) file = `${web}${path.slice(1)}`;
+  else if (path === '/vendor/three.module.js') file = `${three}three.module.min.js`;
+  else if (path === '/vendor/three.core.min.js' || path === '/vendor/three.core.js') file = `${three}three.core.min.js`;
   else if (/^\/[a-z-]+\.(js|css)$/.test(path)) file = `${web}${path.slice(1)}`;
   if (!file) {
     response.writeHead(404).end();
@@ -70,7 +73,13 @@ export async function startYardServer({ port = defaultPort, host = '0.0.0.0', ip
   const seats = [null, null];
   const scheme = tls ? 'https' : 'http';
   let externalOrigin = parseOrigin(origin);
-  const servePage = (request, response) => page(request, response, practiceOnly);
+  const servePage = (request, response) => {
+    if (request.url !== '/practice-mailbox') return page(request, response, practiceOnly);
+    if (!practiceOnly) return response.writeHead(404).end();
+    if (request.method !== 'POST') return response.writeHead(405).end();
+    if (!request.headers.origin || !isExpectedOrigin(request)) return response.writeHead(403).end();
+    void mailbox.serve(request, response);
+  };
   const server = tls ? httpsServer(tls, servePage) : httpServer(servePage);
   const ws = new WebSocketServer({ noServer: true, maxPayload: 2048, perMessageDeflate: false });
   const practice = new WebSocketServer({ noServer: true, maxPayload: 16_384, perMessageDeflate: false });
@@ -87,7 +96,18 @@ export async function startYardServer({ port = defaultPort, host = '0.0.0.0', ip
     return externalOrigin ?? (['localhost', '127.0.0.1', '[::1]'].includes(inbound.hostname) ? null : inbound.origin);
   }
 
-  acceptPracticeSignals(practice, request => screenOrigin(request) ?? inviteOrigin(ip ?? readNetworkAddress()), token);
+  const accept = acceptPracticeSignals(practice, request => screenOrigin(request) ?? inviteOrigin(ip ?? readNetworkAddress()), token);
+  const mailbox = createPracticeMailbox(accept, token);
+
+  function isExpectedOrigin(request) {
+    if (!request.headers.origin) return true;
+    try {
+      const client = new URL(request.headers.origin);
+      return client.origin === externalOrigin || client.host === request.headers.host;
+    } catch {
+      return false;
+    }
+  }
 
   function status() {
     const message = JSON.stringify({ type: 'seats', seats: seats.map(seat => ({ screen: Boolean(seat?.screen),
@@ -115,9 +135,8 @@ export async function startYardServer({ port = defaultPort, host = '0.0.0.0', ip
 
   server.on('upgrade', (request, socket, head) => {
     try {
-      const client = request.headers.origin ? new URL(request.headers.origin) : null;
       const endpoint = request.url === '/ws' && !practiceOnly ? ws : request.url === '/practice-signal' ? practice : null;
-      if (!endpoint || (client && client.host !== request.headers.host && client.origin !== externalOrigin)) {
+      if (!endpoint || !isExpectedOrigin(request)) {
         socket.destroy();
         return;
       }
@@ -200,7 +219,10 @@ export async function startYardServer({ port = defaultPort, host = '0.0.0.0', ip
       }
 
       if (!seat?.screen || seat[role] !== socket) return;
-      if (role === 'screen' && data.type === 'ready') match.ready(seat.slot);
+      if (data.type === 'ready') match.ready(seat.slot);
+      if (data.type === 'equip') match.equip(seat.slot, data.weapon);
+      if (data.type === 'reload' && (role === 'phone' || !seat.phone)) match.reload(seat.slot);
+      if (role === 'screen' && data.type === 'screen-audio') seat.screenAudio = data.running === true;
       if (role === 'screen' && data.type === 'pairing') void publishPairing(seat, ip ?? readNetworkAddress());
       if (role === 'phone' && data.type === 'aim-mode' && aimModes.has(data.mode) && seat.aimMode !== data.mode) {
         seat.aimMode = data.mode;
@@ -242,20 +264,35 @@ export async function startYardServer({ port = defaultPort, host = '0.0.0.0', ip
     const paused = (match.phase === 'countdown' || match.phase === 'playing') && !seats.every(seat => seat?.screen);
     if (!paused) match.step(Math.min((time - previous) / 1000, 0.05));
     previous = time;
-    if (++tick % 2 !== 0) return;
+    if (++tick % 2 !== 0) {
+      for (const seat of seats) {
+        if (!seat?.screen) continue;
+        const { yaw, pitch } = match.players[seat.slot];
+        if (yaw !== seat.sentYaw || pitch !== seat.sentPitch) {
+          send(seat.screen, JSON.stringify({ type: 'aim', yaw, pitch }));
+          seat.sentYaw = yaw;
+          seat.sentPitch = pitch;
+        }
+      }
+      return;
+    }
     const state = match.snapshot();
     const content = JSON.stringify({ type: 'state', paused, ...state });
     for (const seat of seats) {
       if (!seat?.screen) continue;
       send(seat.screen, content);
+      seat.sentYaw = state.players[seat.slot].yaw;
+      seat.sentPitch = state.players[seat.slot].pitch;
       if (tick % 12 === 0 || state.events.length) {
         send(seat.phone, JSON.stringify({ type: 'round', phase: state.phase, score: state.score,
           hp: state.players[seat.slot].hp, carry: state.battery.carrier === seat.slot }));
+        if (seat.phone) send(seat.phone, JSON.stringify({ ...combatFeedback(state, seat.slot), screenAudio: seat.screenAudio === true }));
       }
     }
   }, 1000 / 60);
 
   const keepAlive = setInterval(() => {
+    mailbox.sweep();
     for (const socket of [...ws.clients, ...practice.clients]) {
       if (!socket.alive) socket.terminate();
       else { socket.alive = false; socket.ping(); }
@@ -274,6 +311,7 @@ export async function startYardServer({ port = defaultPort, host = '0.0.0.0', ip
     clearInterval(gameTimer);
     clearInterval(keepAlive);
     clearInterval(pairingTimer);
+    mailbox.close();
     for (const socket of [...ws.clients, ...practice.clients]) socket.terminate();
     return new Promise(resolve => server.close(resolve));
   } };
@@ -289,8 +327,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   const tls = NIGHTSHIFT_TLS_CERT && NIGHTSHIFT_TLS_KEY ? { cert: readFileSync(NIGHTSHIFT_TLS_CERT),
     key: readFileSync(NIGHTSHIFT_TLS_KEY) } : undefined;
   const yard = await startYardServer({ port, host: NIGHTSHIFT_HOST, ip: NIGHTSHIFT_IP, origin, tls });
-  const local = `${yard.scheme}://localhost:${yard.port}`;
   const publicOrigin = parseOrigin(origin);
   const room = publicOrigin ?? `${yard.scheme}://${yard.ip}:${yard.port}`;
-  console.log(`夜班货场\n直连靶场（电脑）  ${publicOrigin ?? local}/practice\n双人对战原型      ${room}/`);
+  console.log(`夜班货场 · 行动大厅\n每台电脑打开 ${room}/，各自用手机扫码选择行动。`);
 }
