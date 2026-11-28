@@ -24,7 +24,7 @@ GLB 以米为单位，纹理内嵌。货场包含放芯、交付回运和击落�
 
 ### 主视觉
 
-[全尺寸主视觉](illustrations/wasteland-key-art.jpg) 可用于展示和继续制作。[网页版本](../web/assets/wasteland-key-art.jpg) 用于靶场和对战大厅。
+[全尺寸主视觉](illustrations/wasteland-key-art.jpg) 可用于展示和继续制作。[网页版本](../web/assets/wasteland-key-art.jpg) 用于行动大厅和联机房间。
 
 > Use case: illustration-story. Hero key art for original browser FPS Night Shift Yard, a cinematic horizontal 3:2 illustrated splash art. Full scene, low three-quarter camera in a post-collapse freight station with giant loading gantry and ribbed petrol-teal shipping modules receding into dust. Two rival original human-scale salvage automatons in muted graphite armor with distinctive ochre-orange and storm-cyan panels weave across the yard, one carrying a luminous chartreuse industrial power cell. Iconic wedge helmets, dark slits, articulated industrial armor, retro mechanical salvage equipment, graphic silhouettes; sharp inky motion streaks and hot amber debris against deep cool teal. Palette deep petroleum / dark steel, warm newsprint cream and dust, oxidized amber, with only one acid-green objective focal point. Premium American comic / constructivist graphic composition, mixed-media 3D forms drawn and screen-printed, bold angular black outlines, limited color separations, selective halftone and subtle registration offset in shadow. Asymmetric strong diagonal, clear foreground/midground/background, single graphic flash drawn like a comic. No writing, no title, no logos, no gore, no real firearm product design, no layout template, no white border.
 
@@ -41,10 +41,18 @@ GLB 以米为单位，纹理内嵌。货场包含放芯、交付回运和击落�
 
 两段录像直接采集桌面端的 3D 画布，均为无声画面。
 
-- [大屏行动大厅](previews/wasteland-lobby.jpg)
-- [手机玩法选择](previews/action-selection.jpg)
-
+- [大屏行动大厅早期截图](previews/wasteland-lobby.jpg)
+- [手机玩法选择早期截图](previews/action-selection.jpg)
 - [对练交火](previews/wasteland-sparring.jpg)
 - [新版货场与重脉冲器](previews/wasteland-loadout.jpg)
 - [铁门破拆](previews/wasteland-breach.jpg)
 - [手机手柄](previews/wasteland-controller.jpg)
+
+<details>
+<summary>备用夜景贴图的生成说明</summary>
+
+使用内置 ImageGen 生成，当主远景无法加载时，游戏使用备用夜景贴图。见 [备用夜景](../web/assets/night-shift-sky.jpg)。提示词如下。
+
+> Original game environment matte painting for the far background of Night Shift Yard, an indie browser 3D FPS. Wide 2:1 horizon panorama, eye-level view toward a distant industrial freight district at late night. Low horizon occupies bottom 35 percent: silhouettes of freight cranes, stepped factory rooftops, two distant smokestacks, tiny sodium-yellow windows; upper 65 percent is layered midnight slate-blue cloud and mist. Bold hand-inked contours and understated offset-printed halftone dots in shadow transitions, simple cel-shaded shapes, desaturated cold navy and steely blue with sparse warm amber lights. Keep the center and the skyline low contrast so brighter interactive game objects stand out in front. Keep both far edges simple and the same dark blue. Background only. No foreground floor, no characters, no weapons, no marker symbols, no lettering, no frames, no logos.
+
+</details>
