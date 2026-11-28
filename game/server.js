@@ -6,7 +6,10 @@ import { networkInterfaces } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import QRCode from 'qrcode';
 import { WebSocket, WebSocketServer } from 'ws';
-import { YardMatch } from './simulation.js';
+import { YardMatch } from '../web/simulation.js';
+import { combatFeedback } from '../web/combat-feedback.js';
+import { acceptPracticeSignals } from './practice-signals.js';
+import { createPracticeMailbox } from './practice-mailbox.js';
 
 const web = fileURLToPath(new URL('../web/', import.meta.url));
 const three = fileURLToPath(new URL('../node_modules/three/build/', import.meta.url));
@@ -23,17 +26,22 @@ function networkAddress() {
   return addresses.find(ip => /^(en|eth|wlan)/.test(ip.name))?.address ?? addresses[0]?.address ?? '127.0.0.1';
 }
 
-function page(request, response) {
+function page(request, response, practiceOnly) {
   const path = new URL(request.url, 'http://nightshift.local').pathname;
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     response.writeHead(405).end();
     return;
   }
+  if (practiceOnly && path === '/') {
+    response.writeHead(302, { Location: '/practice?preview=1', 'Cache-Control': 'no-store' }).end();
+    return;
+  }
   let file;
-  if (path === '/') file = `${web}index.html`;
+  if (path === '/' || path === '/practice' || path === '/duel') file = `${web}index.html`;
   else if (path === '/controller') file = `${web}controller.html`;
-  else if (path === '/assets/night-shift-sky.jpg') file = `${web}assets/night-shift-sky.jpg`;
-  else if (/^\/vendor\/three\.(module|core)\.js$/.test(path)) file = `${three}${path.split('/').at(-1)}`;
+  else if (/^\/assets\/(night-shift-sky|wasteland-horizon|wasteland-key-art)\.jpg$/.test(path)) file = `${web}${path.slice(1)}`;
+  else if (path === '/vendor/three.module.js') file = `${three}three.module.min.js`;
+  else if (path === '/vendor/three.core.min.js' || path === '/vendor/three.core.js') file = `${three}three.core.min.js`;
   else if (/^\/[a-z-]+\.(js|css)$/.test(path)) file = `${web}${path.slice(1)}`;
   if (!file) {
     response.writeHead(404).end();
@@ -51,16 +59,55 @@ function page(request, response) {
   });
 }
 
-export async function startYardServer({ port = defaultPort, host = '0.0.0.0', ip, tls, origin,
+function parseOrigin(origin) {
+  const externalURL = origin ? new URL(origin) : null;
+  if (externalURL && !['https:', 'http:'].includes(externalURL.protocol)) {
+    throw new Error('NIGHTSHIFT_ORIGIN must be an HTTP or HTTPS address.');
+  }
+  return externalURL?.origin;
+}
+
+export async function startYardServer({ port = defaultPort, host = '0.0.0.0', ip, tls, origin, practiceOnly = false,
   readNetworkAddress = networkAddress } = {}) {
   const match = new YardMatch();
   const seats = [null, null];
   const scheme = tls ? 'https' : 'http';
-  const server = tls ? httpsServer(tls, page) : httpServer(page);
+  let externalOrigin = parseOrigin(origin);
+  const servePage = (request, response) => {
+    if (request.url !== '/practice-mailbox') return page(request, response, practiceOnly);
+    if (!practiceOnly) return response.writeHead(404).end();
+    if (request.method !== 'POST') return response.writeHead(405).end();
+    if (!request.headers.origin || !isExpectedOrigin(request)) return response.writeHead(403).end();
+    void mailbox.serve(request, response);
+  };
+  const server = tls ? httpsServer(tls, servePage) : httpServer(servePage);
   const ws = new WebSocketServer({ noServer: true, maxPayload: 2048, perMessageDeflate: false });
+  const practice = new WebSocketServer({ noServer: true, maxPayload: 16_384, perMessageDeflate: false });
   const send = (socket, data) => {
     if (socket?.readyState === WebSocket.OPEN && socket.bufferedAmount < 64_000) socket.send(data);
   };
+
+  function inviteOrigin(address) {
+    return `${scheme}://${address}:${server.address().port}`;
+  }
+
+  function screenOrigin(request) {
+    const inbound = new URL(`${scheme}://${request.headers.host ?? `localhost:${server.address().port}`}`);
+    return externalOrigin ?? (['localhost', '127.0.0.1', '[::1]'].includes(inbound.hostname) ? null : inbound.origin);
+  }
+
+  const accept = acceptPracticeSignals(practice, request => screenOrigin(request) ?? inviteOrigin(ip ?? readNetworkAddress()), token);
+  const mailbox = createPracticeMailbox(accept, token);
+
+  function isExpectedOrigin(request) {
+    if (!request.headers.origin) return true;
+    try {
+      const client = new URL(request.headers.origin);
+      return client.origin === externalOrigin || client.host === request.headers.host;
+    } catch {
+      return false;
+    }
+  }
 
   function status() {
     const message = JSON.stringify({ type: 'seats', seats: seats.map(seat => ({ screen: Boolean(seat?.screen),
@@ -70,7 +117,7 @@ export async function startYardServer({ port = defaultPort, host = '0.0.0.0', ip
 
   async function publishPairing(seat, address) {
     const socket = seat.screen;
-    const lan = seat.inboundOrigin ?? `${scheme}://${address}:${server.address().port}`;
+    const lan = seat.inboundOrigin ?? inviteOrigin(address);
     if (seat.lan === lan) return;
     seat.lan = lan;
     const pairURL = `${lan}/controller#${seat.pair}`;
@@ -88,12 +135,12 @@ export async function startYardServer({ port = defaultPort, host = '0.0.0.0', ip
 
   server.on('upgrade', (request, socket, head) => {
     try {
-      const suppliedOrigin = request.headers.origin;
-      if (request.url !== '/ws' || (suppliedOrigin && new URL(suppliedOrigin).host !== request.headers.host)) {
+      const endpoint = request.url === '/ws' && !practiceOnly ? ws : request.url === '/practice-signal' ? practice : null;
+      if (!endpoint || !isExpectedOrigin(request)) {
         socket.destroy();
         return;
       }
-      ws.handleUpgrade(request, socket, head, client => ws.emit('connection', client, request));
+      endpoint.handleUpgrade(request, socket, head, client => endpoint.emit('connection', client, request));
     } catch {
       socket.destroy();
     }
@@ -123,8 +170,7 @@ export async function startYardServer({ port = defaultPort, host = '0.0.0.0', ip
       if (!role && data.type === 'screen') {
         let inboundOrigin;
         try {
-          const inbound = new URL(`${scheme}://${request.headers.host ?? `localhost:${server.address().port}`}`);
-          inboundOrigin = origin ?? (['localhost', '127.0.0.1', '[::1]'].includes(inbound.hostname) ? null : inbound.origin);
+          inboundOrigin = screenOrigin(request);
         } catch {
           socket.close(1008, 'host');
           return;
@@ -173,7 +219,10 @@ export async function startYardServer({ port = defaultPort, host = '0.0.0.0', ip
       }
 
       if (!seat?.screen || seat[role] !== socket) return;
-      if (role === 'screen' && data.type === 'ready') match.ready(seat.slot);
+      if (data.type === 'ready') match.ready(seat.slot);
+      if (data.type === 'equip') match.equip(seat.slot, data.weapon);
+      if (data.type === 'reload' && (role === 'phone' || !seat.phone)) match.reload(seat.slot);
+      if (role === 'screen' && data.type === 'screen-audio') seat.screenAudio = data.running === true;
       if (role === 'screen' && data.type === 'pairing') void publishPairing(seat, ip ?? readNetworkAddress());
       if (role === 'phone' && data.type === 'aim-mode' && aimModes.has(data.mode) && seat.aimMode !== data.mode) {
         seat.aimMode = data.mode;
@@ -215,21 +264,36 @@ export async function startYardServer({ port = defaultPort, host = '0.0.0.0', ip
     const paused = (match.phase === 'countdown' || match.phase === 'playing') && !seats.every(seat => seat?.screen);
     if (!paused) match.step(Math.min((time - previous) / 1000, 0.05));
     previous = time;
-    if (++tick % 2 !== 0) return;
+    if (++tick % 2 !== 0) {
+      for (const seat of seats) {
+        if (!seat?.screen) continue;
+        const { yaw, pitch } = match.players[seat.slot];
+        if (yaw !== seat.sentYaw || pitch !== seat.sentPitch) {
+          send(seat.screen, JSON.stringify({ type: 'aim', yaw, pitch }));
+          seat.sentYaw = yaw;
+          seat.sentPitch = pitch;
+        }
+      }
+      return;
+    }
     const state = match.snapshot();
     const content = JSON.stringify({ type: 'state', paused, ...state });
     for (const seat of seats) {
       if (!seat?.screen) continue;
       send(seat.screen, content);
+      seat.sentYaw = state.players[seat.slot].yaw;
+      seat.sentPitch = state.players[seat.slot].pitch;
       if (tick % 12 === 0 || state.events.length) {
         send(seat.phone, JSON.stringify({ type: 'round', phase: state.phase, score: state.score,
           hp: state.players[seat.slot].hp, carry: state.battery.carrier === seat.slot }));
+        if (seat.phone) send(seat.phone, JSON.stringify({ ...combatFeedback(state, seat.slot), screenAudio: seat.screenAudio === true }));
       }
     }
   }, 1000 / 60);
 
   const keepAlive = setInterval(() => {
-    for (const socket of ws.clients) {
+    mailbox.sweep();
+    for (const socket of [...ws.clients, ...practice.clients]) {
       if (!socket.alive) socket.terminate();
       else { socket.alive = false; socket.ping(); }
     }
@@ -242,21 +306,28 @@ export async function startYardServer({ port = defaultPort, host = '0.0.0.0', ip
     for (const seat of localScreens) void publishPairing(seat, address);
   }, 2000);
 
-  return { server, match, port: server.address().port, get ip() { return ip ?? readNetworkAddress(); }, scheme, close: () => {
+  return { server, match, port: server.address().port, get ip() { return ip ?? readNetworkAddress(); }, scheme,
+    setOrigin(value) { externalOrigin = parseOrigin(value); }, close: () => {
     clearInterval(gameTimer);
     clearInterval(keepAlive);
     clearInterval(pairingTimer);
-    for (const socket of ws.clients) socket.terminate();
+    mailbox.close();
+    for (const socket of [...ws.clients, ...practice.clients]) socket.terminate();
     return new Promise(resolve => server.close(resolve));
   } };
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   const { NIGHTSHIFT_PORT, NIGHTSHIFT_HOST, NIGHTSHIFT_IP, NIGHTSHIFT_TLS_CERT, NIGHTSHIFT_TLS_KEY,
-    NIGHTSHIFT_ORIGIN } = process.env;
+    NIGHTSHIFT_ORIGIN, CODESPACES, CODESPACE_NAME, GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN } = process.env;
+  const port = Number(NIGHTSHIFT_PORT ?? defaultPort);
+  const codespaceOrigin = CODESPACES === 'true' && CODESPACE_NAME && GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN
+    ? `https://${CODESPACE_NAME}-${port}.${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}` : undefined;
+  const origin = NIGHTSHIFT_ORIGIN ?? codespaceOrigin;
   const tls = NIGHTSHIFT_TLS_CERT && NIGHTSHIFT_TLS_KEY ? { cert: readFileSync(NIGHTSHIFT_TLS_CERT),
     key: readFileSync(NIGHTSHIFT_TLS_KEY) } : undefined;
-  const yard = await startYardServer({ port: Number(NIGHTSHIFT_PORT ?? defaultPort), host: NIGHTSHIFT_HOST,
-    ip: NIGHTSHIFT_IP, origin: NIGHTSHIFT_ORIGIN, tls });
-  console.log(`夜班货场\n本机  ${yard.scheme}://localhost:${yard.port}\n局域网  ${NIGHTSHIFT_ORIGIN ?? `${yard.scheme}://${yard.ip}:${yard.port}`}`);
+  const yard = await startYardServer({ port, host: NIGHTSHIFT_HOST, ip: NIGHTSHIFT_IP, origin, tls });
+  const publicOrigin = parseOrigin(origin);
+  const room = publicOrigin ?? `${yard.scheme}://${yard.ip}:${yard.port}`;
+  console.log(`夜班货场 · 行动大厅\n每台电脑打开 ${room}/，各自用手机扫码选择行动。`);
 }

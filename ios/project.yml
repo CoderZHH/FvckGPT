@@ -1,0 +1,24 @@
+name: NightShiftController
+options:
+  deploymentTarget:
+    iOS: "17.0"
+targets:
+  NightShiftController:
+    type: application
+    platform: iOS
+    sources:
+      - NightShiftController
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.nightshift.yard.controller
+        GENERATE_INFOPLIST_FILE: YES
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: 1
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        INFOPLIST_KEY_CFBundleDisplayName: 夜班货场
+        INFOPLIST_KEY_NSCameraUsageDescription: 扫描电脑上的夜班货场手柄二维码。
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: 连接同一 Wi-Fi 上的游戏电脑，发送你的手柄操作。
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"

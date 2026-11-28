@@ -3,26 +3,97 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#171f28">
+  <meta name="theme-color" content="#111a18">
   <title>夜班货场 · 手机手柄</title>
-  <link rel="stylesheet" href="/yard.css">
+  <link rel="stylesheet" href="/controller.css">
+  <link rel="stylesheet" href="/rooms.css">
 </head>
-<body class="controller">
+<body class="mobile-controller">
   <header class="controller-head">
-    <div class="mark"><span class="mark-light"></span><div><strong>手机手柄</strong><small id="connection" role="status">正在连接电脑</small></div></div>
+    <div class="controller-mark"><span aria-hidden="true"></span><div><strong>夜班货场</strong><small id="connection" role="status">正在连接电脑</small></div></div>
     <div class="controller-actions">
-      <button id="touch-mode" type="button" hidden>触屏模式</button>
-      <button id="motion" type="button" hidden>开启体感</button>
+      <button id="retry-pair" type="button" hidden>重新连接</button>
+      <details id="settings" hidden>
+        <summary>设置</summary>
+        <div class="sensitivity-panel">
+          <label for="gyro-sensitivity">体感灵敏度 <output id="gyro-value" for="gyro-sensitivity"></output></label>
+          <input id="gyro-sensitivity" type="range" min="0.5" max="3" step="0.05" value="1.6">
+          <label for="touch-sensitivity">拖动灵敏度 <output id="touch-value" for="touch-sensitivity"></output></label>
+          <input id="touch-sensitivity" type="range" min="0.5" max="2.5" step="0.05" value="1.2">
+          <label class="gesture-setting"><span>上抬换弹</span><input id="flick-reload" type="checkbox" aria-describedby="flick-help"></label>
+          <p id="flick-help">松开开火键，快速抬起手机顶端换弹。</p>
+          <button id="reset-sensitivity" type="button">恢复默认</button>
+        </div>
+      </details>
     </div>
   </header>
-  <p id="aim-help" class="aim-help" role="status" hidden></p>
-  <main id="pads" class="pads" aria-label="游戏控制区" hidden>
-    <div id="move" class="pad move" aria-label="移动摇杆">
-      <div class="pad-name">移动</div>
-      <div class="stick-base"><span class="stick-thumb"></span></div>
+  <section id="onboarding" class="controller-onboarding" aria-labelledby="guide-title" hidden>
+    <h1 id="guide-title">让手机对准大屏</h1>
+    <p id="guide-help">充电口朝自己，侧立握稳，手机顶边指向大屏中央。授权后保持握稳，手机会自动校准。</p>
+    <button id="guide-permission" type="button">允许体感并开始</button>
+    <button id="guide-touch" type="button">先用触屏</button>
+  </section>
+  <section id="operations" aria-labelledby="operation-title" hidden>
+    <div class="operation-art"><h1 id="operation-title">选择行动</h1></div>
+    <p id="operation-status" role="status"></p>
+    <button id="choose-duel" type="button"><strong>局域网联机</strong><span>断电争夺 · 支持 1v1 至 5v5</span></button>
+    <button id="choose-solo" type="button"><strong>限时清场</strong><span>单人挑战 · 60 秒内连续命中巡逻机，最高四倍积分</span></button>
+  </section>
+  <section id="aim-controls" class="aim-controls" aria-label="瞄准方式" hidden>
+    <div class="aim-buttons">
+      <button id="motion" type="button" hidden>开启体感</button>
+      <button id="touch-mode" type="button" hidden>切回触屏</button>
     </div>
-    <div id="look" class="pad look" aria-label="拖动转视角">
+    <p id="aim-help" class="aim-help" role="status" hidden></p>
+  </section>
+  <section id="combat-status" class="combat-status" aria-label="对局状态" hidden>
+    <div class="combat-stat"><span>生命</span> <b id="hp-count">—</b></div>
+    <div class="combat-stat ammo"><span>弹药</span> <b id="ammo-count">—</b> <span id="reserve-count"></span></div>
+    <div id="weapon-name" class="weapon-name" hidden></div>
+    <div id="combat-feedback" class="combat-feedback" role="status"></div>
+  </section>
+  <section id="phone-room" class="room-panel" aria-labelledby="phone-room-title" hidden>
+    <h2 id="phone-room-title">联机房间</h2>
+    <div id="room-entry">
+      <form id="create-room" class="room-form">
+        <label for="room-size">队伍人数</label>
+        <div><select id="room-size"><option value="1">1v1</option><option value="2">2v2</option><option value="3">3v3</option><option value="4">4v4</option><option value="5">5v5</option></select>
+        <button type="submit">创建房间</button></div>
+      </form>
+      <form id="join-room" class="room-form">
+        <label for="battle-code">已有房间码</label>
+        <div><input id="battle-code" placeholder="6 位房间码" autocomplete="off" maxlength="6" autocapitalize="characters" required>
+        <button type="submit">加入房间</button></div>
+      </form>
+    </div>
+    <p id="phone-room-status" role="status"></p>
+    <div id="phone-room-live" hidden>
+      <button id="copy-battle-code" type="button">复制房间码</button>
+      <div id="phone-roster" class="room-roster"></div>
+      <div class="team-actions"><button id="team-orange" type="button">加入橙队</button><button id="team-blue" type="button">加入蓝队</button></div>
+      <button id="room-ready" type="button">准备</button>
+      <button id="room-start" type="button" hidden>开始对局</button>
+      <button id="room-retry" type="button" hidden>重试直连</button>
+    </div>
+    <button id="room-back" type="button">离开房间</button>
+  </section>
+  <section id="round-summary" aria-live="polite" hidden><h2 id="round-outcome"></h2><strong id="final-score"></strong></section>
+  <div id="phone-menu" class="phone-menu" hidden>
+    <button id="phone-armory" type="button" aria-expanded="false" aria-controls="phone-loadouts">武器</button>
+    <button id="return-menu" type="button" hidden>返回大厅</button>
+    <button id="phone-round" type="button">开始对练</button>
+  </div>
+  <section id="phone-loadouts" class="phone-loadouts" aria-label="武器" hidden></section>
+  <main id="pads" class="pads" aria-label="游戏控制区" hidden>
+    <div id="move" class="pad move" role="group" aria-label="移动摇杆">
+      <div class="pad-name">移动</div>
+      <button id="dash" type="button" aria-label="沿移动方向冲刺">冲刺</button>
+      <div class="stick-base" aria-hidden="true"><span class="stick-thumb"></span></div>
+    </div>
+    <div id="look" class="pad look" role="group" aria-label="拖动转视角">
       <div id="look-label" class="pad-name">拖动瞄准</div>
+      <div class="look-guides" aria-hidden="true"></div>
+      <button id="reload" type="button">换弹</button>
       <button id="fire" type="button" aria-label="开火">开火</button>
     </div>
   </main>

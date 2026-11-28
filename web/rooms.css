@@ -1,0 +1,28 @@
+.room-panel { min-width: 0; }
+.room-roster { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: .7rem; }
+.room-team { min-width:0; border:1px solid #ead5a845; border-top: 3px solid var(--room-team); background: #101b19e8; padding:.55rem .7rem; }
+.room-team h3 { margin:0 0 .4rem; color:var(--room-team); font-size:.94rem; }
+.room-team ol { list-style:none; padding:0; margin:0; }
+.room-team li { display:flex; flex-wrap:wrap; gap:.1rem .35rem; justify-content:space-between; align-items:center; padding:.36rem 0; border-top:1px solid #ead5a826; line-height:1.2; }
+.room-team small { color:#dbc5a4; font-size:.72rem; }
+.room-team .room-ready { color:#d7f092; }
+.room-team .room-empty { color:#b0afa2; }
+#phone-room { width:min(100%,32rem); margin:0 auto; color:#f5e9c9; }
+#phone-room h2 { margin:.5rem 0 .8rem; }
+#phone-room-status { margin:.65rem 0; color:#e9d3a4; min-height:1.4em; line-height:1.35; }
+.room-form { display:grid; gap:.3rem; margin:.7rem 0; }
+.room-form div,.team-actions { display:grid; grid-template-columns: 1fr 1fr; gap:.45rem; }
+#phone-room button,#phone-room select,#phone-room input { min-width:0; min-height:44px; padding:.45rem .55rem; font:inherit; }
+#phone-room input,#phone-room select { background:#0f1b16; color:#f5e9c9; border:1px solid #ad9a69; border-radius:5px; }
+#phone-room input { text-transform:uppercase; }
+#phone-room button:disabled { opacity:.52; }
+.team-actions { margin:.7rem 0; }
+#copy-battle-code,#room-ready,#room-start,#room-retry,#room-back { width:100%; margin:.3rem 0; }
+#phone-room button { border:1px solid #6b7f6e; border-radius:4px; background:#273a31; color:#fff2d0; }
+#phone-room form button,#phone-room #room-ready { border-color:#a69869; background:#344b3c; }
+#phone-room #room-start { background:#d5e894; color:#172211; border-color:#e8f1b9; font-weight:700; }
+#phone-room #room-back { background:transparent; color:#cfbea0; }
+#phone-room #copy-battle-code { margin-bottom:.7rem; }
+body[data-activity="room"] #lobby .lobby-inner { max-width:min(600px,88vw); width:88vw; max-height:85vh; overflow:auto; }
+body[data-activity="room"] .room-team li { padding-block:clamp(.22rem,1vh,.58rem); }
+body[data-activity="room"] .briefings { display:none; }

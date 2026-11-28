@@ -1,54 +1,48 @@
 # 夜班货场
 
-一款局域网里的第一人称对战游戏。电脑浏览器显示画面，手机扫码就能移动、转视角、开火。90 秒内把中央电池送回己方货台，先拿两分获胜。
+用手机控制准星、走位和开火，在电脑上玩第一人称废土竞技。支持单人挑战和 1v1 至 5v5 局域网联机。每位玩家使用一台电脑和一部手机。
 
-## 开房
+## 启动
 
-需要 Node.js 22 或更新版本。在项目目录运行：
+已安装依赖的 Mac，在 Finder 双击 [打开夜班货场.command](打开夜班货场.command)。终端会启动临时 HTTPS 入口，并在浏览器打开行动大厅。
+
+首次启动需要 Node.js 22 或更新版本和 `cloudflared`。在项目目录运行以下命令。
 
 ```sh
 npm ci
-npm start
+npm run preview:https
 ```
 
-房主用电脑打开终端打印的「本机」地址。朋友在同一 Wi-Fi 下，用自己的电脑打开「局域网」地址。每个人扫各自屏幕上的二维码，电脑点击「准备开打」。一个房间支持两名玩家。等待时可以进场练习。
+每台电脑打开终端本次打印的同一个 HTTPS 链接。保持启动窗口开启，结束试玩按 `Control + C`。下次启动会生成新地址，请使用新页面上的二维码。
 
-- 手机左边是移动摇杆，右边是开火。用体感时点「开启体感」，允许动作与方向，充电口朝自己、手机侧立、顶边指向大屏中央，再点「校准准星」。转动手机控制第一人称视角，拖动右区可快速转身。触屏模式支持按住「开火」并拖动视角。
-- 电脑也可用 WASD 和鼠标。点击场景锁定鼠标，用 Esc 释放。
-- 瞄准铁板开三次火，可以打通侧边通道。搬电池被击倒时，电池掉在现场，玩家三秒后复活。
-- 普通热点 HTTP 可以配对和用触屏。iPhone 网页体感需要 Safari 信任的 HTTPS。电脑端「连手机」面板会显示当前是否能用体感。`NIGHTSHIFT_IP` 可指定二维码里的局域网地址。
-- 电脑从 `localhost` 打开游戏时，切换 Wi-Fi 或手机热点后，二维码会自动跟随电脑的局域网 IP。换网络后用手机重新扫电脑上的码。
+## 用手机开玩
 
-## 用 HTTPS 开启 iPhone 体感
+1. 所有设备连同一个可以互访的局域网。各用手机相机扫**自己电脑**上的二维码。
+2. 允许体感后，充电口朝自己，侧立握稳手机，顶边对准大屏中央，按引导完成校准。也可以选「先用触屏」。
+3. 一个人选「限时清场」。多人选「局域网联机」，一人选择队伍人数并创建房间，其他人输入六位房间码。
+4. 在手机上选队并点「准备」。两队满员且所有人直连、准备后，房主点「开始对局」。
 
-手机手柄和游戏连接使用同一个 HTTPS 入口。入口需要有 Safari 信任的证书，并将 `/ws` 上的 WebSocket 请求交给这台游戏主机。GitHub 仓库用于存放源码，GitHub Pages 的静态托管无法运行项目里的房间服务。
+左摇杆移动。转动手机微调准星，右侧横拖快速转身。开火、换装、冲刺和换弹都在手机上。可点击换弹，也可在开启体感换弹后快速抬起手机顶端。
 
-如果需要在局域网里玩，让证书覆盖的域名在电脑和 iPhone 上都解析到游戏 Mac 的局域网地址。用自己的域名和证书替换下面的示例值，然后让电脑打开相同的网址，再扫描新二维码。
+| 模式 | 得分与胜负 |
+| --- | --- |
+| 限时清场 | 60 秒内命中巡逻机。连续命中按连击倍数计分，打空或受击会中断连击。结算显示本机纪录。 |
+| 断电争夺 | 击倒得 1 分，交付电池得 2 分。1v1 先得 5 分，2v2 至 5v5 的目标是每队人数乘以 4。90 秒到时比较比分，同分为平局。 |
 
-```sh
-NIGHTSHIFT_TLS_CERT=/path/to/fullchain.pem \
-NIGHTSHIFT_TLS_KEY=/path/to/privkey.pem \
-NIGHTSHIFT_ORIGIN=https://yard.example.com:8787 \
-npm start
-```
+联机结算后可从手机返回同一房间重新准备。有人中途离开时，其余玩家返回房间，准备状态重置。房主离开时房间关闭。
 
-也可以让已有的 HTTPS 反向代理在前面处理证书。代理将网页和 `/ws` 转发给 `npm start` 启动的服务，并保留原始 `Host`。此时只需用 `NIGHTSHIFT_ORIGIN` 指定代理对玩家开放的 HTTPS 网址。证书私钥保留在主机上。
+## 连不上时
 
-## 场景与反馈
+| 看到的情况 | 怎么处理 |
+| --- | --- |
+| 网页打不开，或二维码失效 | 确认启动窗口仍在运行。重新启动后，两台电脑都打开本次生成的新网址，然后重新扫码。 |
+| 手机进不了同一房间 | 确认电脑使用同一个大厅网址，核对六位房间码和房间是否已满。 |
+| 房间里显示「等待直连」 | 确认设备在同一可互访的 Wi‑Fi，开启浏览器的本地网络权限，然后在手机点「重试直连」。访客 Wi‑Fi 或热点可能隔离设备。 |
+| 房主的开局按钮是灰色 | 看房间名单里哪些位置是空位、哪些玩家还未直连或准备。 |
+| 手机只能触屏 | 打开 HTTPS 大厅重新扫码，在手机浏览器允许访问动作与方向。 |
 
-Three.js 实时渲染原创货柜、货台、维修机器人和第一人称装置。远景插画围在地图外，玩家可以转身看向不同方向。深蓝背景托住中景掩体，橙蓝区分玩家，黄铜色铁板可打穿，荧光绿留给电池和回合目标。物件用分段明暗、网点纹理和重点墨线表现漫画质感。
+## 项目资料
 
-音轨由 Web Audio 实时合成。开火、金属、木箱、命中、铁板碎裂与得分各有声音。左右声像提示对手开火的大致方位，交火时音乐自动降低。开火、受击与近处碎裂有不同幅度的短振屏，场景和准星一起动，计时和比分留在原位。右上角可静音或关闭振屏。
-
-`motion/` 保留原生 iPhone 的顶边瞄准、校准及平滑算法。网页体感沿用顶边方向，并把转动量转换为第一人称视角变化。
-
-`npm test` 检查配对隔离、移动、铁板碰撞、命中、抢电池、再开一局和体感方向。
-
-<details>
-<summary>原创远景素材</summary>
-
-使用内置 ImageGen 生成，游戏加载 `web/assets/night-shift-sky.jpg`。提示词如下。
-
-> Original game environment matte painting for the far background of Night Shift Yard, an indie browser 3D FPS. Wide 2:1 horizon panorama, eye-level view toward a distant industrial freight district at late night. Low horizon occupies bottom 35 percent: silhouettes of freight cranes, stepped factory rooftops, two distant smokestacks, tiny sodium-yellow windows; upper 65 percent is layered midnight slate-blue cloud and mist. Bold hand-inked contours and understated offset-printed halftone dots in shadow transitions, simple cel-shaded shapes, desaturated cold navy and steely blue with sparse warm amber lights. Keep the center and the skyline low contrast so brighter interactive game objects stand out in front. Keep both far edges simple and the same dark blue. Background only. No foreground floor, no characters, no weapons, no marker symbols, no lettering, no frames, no logos.
-
-</details>
+- [开发、测试与 HTTPS 部署](docs/development.md)
+- [美术包、模型与实战录像](art/README.md)
+- [iOS 扫码手柄与原生触感](ios/README.md)
